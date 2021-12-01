@@ -1,5 +1,6 @@
 package io.turntabl.orderservice.services.impl;
 
+import com.google.gson.Gson;
 import io.turntabl.orderservice.constants.OrderStatus;
 import io.turntabl.orderservice.dtos.OrderDto;
 import io.turntabl.orderservice.models.Order;
@@ -7,17 +8,28 @@ import io.turntabl.orderservice.repositories.OrderRepository;
 import io.turntabl.orderservice.requests.OrderRequest;
 import io.turntabl.orderservice.services.OrderService;
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
 @AllArgsConstructor
+@Slf4j
 public class OrderServiceImpl implements OrderService {
 
     private final OrderRepository orderRepository;
+
+    private final StringRedisTemplate stringRedisTemplate;
+
+    private final ChannelTopic topic;
+
 
     @Override
     public OrderDto createOrder(String userId, OrderRequest orderRequest) {
@@ -31,7 +43,8 @@ public class OrderServiceImpl implements OrderService {
 
         OrderDto orderDto = OrderDto.fromModel(orderRepository.save(order));
 
-        //:TODO PUSH TO A PARTICULAR TOPIC
+        stringRedisTemplate.convertAndSend(topic.getTopic(), orderDto.getId());
+
         return orderDto;
     }
 
@@ -47,6 +60,8 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public List<OrderDto> getAllOrders(String userId) {
-        return null;
+        return orderRepository.findByUserId(userId).stream()
+                .map(OrderDto::fromModel)
+                .collect(Collectors.toList());
     }
 }

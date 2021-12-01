@@ -51,6 +51,7 @@ public class OrderDto {
         orderDto.setCreatedAt(order.getCreatedAt());
         orderDto.setStatus(order.getStatus());
         orderDto.setSide(order.getSide());
+        orderDto.setUserId(order.getUserId());
 
         return orderDto;
     }
