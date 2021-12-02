@@ -105,7 +105,6 @@ public class RedisMessageListenerImpl implements MessageListener {
 
         sendOrderToExchange(receivedOrder,exchangeDto);
 
-
     }
 
     private void sellOperation(Order receivedOrder, MarketDataDto exchangeOneData, MarketDataDto exchangeTwoData, ExchangeDto exchangeDto) {
