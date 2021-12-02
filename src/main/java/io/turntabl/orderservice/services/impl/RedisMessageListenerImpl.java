@@ -12,12 +12,17 @@ import io.turntabl.orderservice.models.Order;
 import io.turntabl.orderservice.models.Wallet;
 import io.turntabl.orderservice.repositories.OrderRepository;
 import io.turntabl.orderservice.repositories.WalletRepository;
+import io.turntabl.orderservice.requests.MalonOrderRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.connection.Message;
 import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.data.redis.core.HashOperations;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
 import java.util.Optional;
 
@@ -36,6 +41,12 @@ public class RedisMessageListenerImpl implements MessageListener {
 
     @Autowired
     private WalletRepository walletRepository;
+
+    @Autowired
+    private WebClient webClient;
+
+    @Value("${matraining.token}")
+    private String apiKey;
 
 
     @Override
@@ -65,14 +76,14 @@ public class RedisMessageListenerImpl implements MessageListener {
         MarketDataDto exchangeTwoData = gson.fromJson(hashOperations.get(exchangeTwoKey, exchangeTwoKey), MarketDataDto.class);
 
         if (receivedOrder.getSide() == Side.BUY) {
-            buyOperation(receivedOrder, exchangeOneData, exchangeTwoData);
+            buyOperation(receivedOrder, exchangeOneData, exchangeTwoData, exchangeOne);
         }else {
-            sellOperation(receivedOrder, exchangeOneData, exchangeTwoData);
+            sellOperation(receivedOrder, exchangeOneData, exchangeTwoData, exchangeOne);
         }
 
     }
 
-    private void buyOperation(Order receivedOrder, MarketDataDto exchangeOneData, MarketDataDto exchangeTwoData) {
+    private void buyOperation(Order receivedOrder, MarketDataDto exchangeOneData, MarketDataDto exchangeTwoData, ExchangeDto exchangeDto) {
 
         double totalBuyLimit = exchangeOneData.getBuyLimit() + exchangeTwoData.getBuyLimit();
 
@@ -90,13 +101,14 @@ public class RedisMessageListenerImpl implements MessageListener {
             return;
         }
 
-        double buyPrice = Math.min(exchangeOneData.getBuyLimit(), exchangeTwoData.getBuyLimit());
+        double buyPrice = Math.min(exchangeOneData.getAskPrice(), exchangeTwoData.getAskPrice());
 
+        sendOrderToExchange(receivedOrder,exchangeDto);
 
 
     }
 
-    private void sellOperation(Order receivedOrder, MarketDataDto exchangeOneData, MarketDataDto exchangeTwoData) {
+    private void sellOperation(Order receivedOrder, MarketDataDto exchangeOneData, MarketDataDto exchangeTwoData, ExchangeDto exchangeDto) {
         double totalSellLimit = exchangeOneData.getSellLimit() + exchangeTwoData.getSellLimit();
 
         double price = receivedOrder.getPrice() * receivedOrder.getQuantity();
@@ -118,7 +130,36 @@ public class RedisMessageListenerImpl implements MessageListener {
             return;
         }
 
+        sendOrderToExchange(receivedOrder,exchangeDto);
 
+    }
 
+    private void sendOrderToExchange(Order order, ExchangeDto exchangeDto) {
+
+        MalonOrderRequest malonOrderRequest = MalonOrderRequest.fromOrder(order);
+
+        ResponseEntity<String> response = webClient.post()
+                .uri(exchangeDto.getBaseUrl()+"/"+apiKey+"/order")
+                .body(Mono.just(malonOrderRequest), MalonOrderRequest.class)
+                .retrieve()
+                .toEntity(String.class)
+                .block();
+
+        if (response == null) return;
+
+        Optional<String> body = Optional.ofNullable(response.getBody());
+
+        log.info("response {}", response.getBody());
+        log.info("code {}", response.getStatusCode());
+
+        if (response.getStatusCode().is2xxSuccessful()) {
+
+            String orderId = body.orElse("").substring(1, response.getBody().length()-1);
+
+            order.setOrderId(orderId);
+            order.setStatus(OrderStatus.PROCESSING);
+
+            orderRepository.save(order);
+        }
     }
 }
