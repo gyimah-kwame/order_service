@@ -11,6 +11,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Field;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @AllArgsConstructor
@@ -19,7 +20,7 @@ public class OrderDto {
 
     private String id;
 
-    private String orderId;
+    private List<OrderInformationDto> orderInformation;
 
     private String userId;
 
@@ -43,7 +44,7 @@ public class OrderDto {
 //        BeanUtils.copyProperties(order, orderDto);
 
         orderDto.setId(order.getId());
-        orderDto.setOrderId(order.getOrderId());
+        orderDto.setOrderInformation(order.getOrderInformation());
         orderDto.setQuantity(order.getQuantity());
         orderDto.setPrice(order.getPrice());
         orderDto.setTicker(order.getTicker());

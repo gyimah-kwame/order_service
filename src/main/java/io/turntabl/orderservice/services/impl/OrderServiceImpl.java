@@ -1,8 +1,10 @@
 package io.turntabl.orderservice.services.impl;
 
 import com.google.gson.Gson;
+import io.turntabl.orderservice.constants.OrderItemStatus;
 import io.turntabl.orderservice.constants.OrderStatus;
 import io.turntabl.orderservice.dtos.OrderDto;
+import io.turntabl.orderservice.dtos.OrderInformationDto;
 import io.turntabl.orderservice.models.Order;
 import io.turntabl.orderservice.repositories.OrderRepository;
 import io.turntabl.orderservice.requests.OrderRequest;
@@ -16,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -54,8 +57,57 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    public List<OrderDto> findOrdersByStatus(String status) {
+        return orderRepository.findByStatus(OrderStatus.PENDING.toString()).stream().map(OrderDto::fromModel).collect(Collectors.toList());
+    }
+
+    @Override
     public Boolean deleteOrder(String id, String userId) {
         return null;
+    }
+
+    @Override
+    public void updateOrderStatus(String orderId, String orderItemId, OrderItemStatus status, int quantityFulfilled) {
+        Optional<Order> order = orderRepository.findById(orderId);
+
+        if (order.isEmpty()) return;
+
+        Order actualOrder = order.get();
+
+        /*
+            find order item id
+         */
+        OrderInformationDto orderItem = actualOrder.getOrderInformation()
+                .stream().filter(item -> item.getOrderId().equals(orderItemId))
+                .findFirst()
+                .orElse(new OrderInformationDto());
+
+        orderItem.setOrderId(orderId);
+        orderItem.setStatus(status);
+        orderItem.setQuantityFulfilled(quantityFulfilled == -1 ? orderItem.getQuantity() : quantityFulfilled);
+
+        /*
+            find the other order items excluding the one we are updating
+         */
+        List<OrderInformationDto> items = actualOrder.getOrderInformation()
+                .stream()
+                .filter(x -> !x.getOrderId().equals(orderItem.getOrderId()))
+                .collect(Collectors.toList());
+
+        // add the updated order item to the list
+        items.add(orderItem);
+
+        actualOrder.setOrderInformation(items);
+
+
+        long fulfilledItems = actualOrder.getOrderInformation().stream().filter(x -> x.getStatus() == OrderItemStatus.FULFILLED).count();
+
+        if (fulfilledItems == actualOrder.getOrderInformation().size()) {
+            actualOrder.setStatus(OrderStatus.FULFILLED);
+        }
+
+        orderRepository.save(actualOrder);
+
     }
 
     @Override

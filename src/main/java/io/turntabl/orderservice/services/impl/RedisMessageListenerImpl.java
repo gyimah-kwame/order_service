@@ -2,12 +2,10 @@ package io.turntabl.orderservice.services.impl;
 
 import com.google.gson.Gson;
 import io.turntabl.orderservice.constants.ExchangeName;
+import io.turntabl.orderservice.constants.OrderItemStatus;
 import io.turntabl.orderservice.constants.OrderStatus;
 import io.turntabl.orderservice.constants.Side;
-import io.turntabl.orderservice.dtos.ExchangeDto;
-import io.turntabl.orderservice.dtos.MarketDataDto;
-import io.turntabl.orderservice.dtos.OrderDto;
-import io.turntabl.orderservice.dtos.PortfolioDto;
+import io.turntabl.orderservice.dtos.*;
 import io.turntabl.orderservice.models.Order;
 import io.turntabl.orderservice.models.Wallet;
 import io.turntabl.orderservice.repositories.OrderRepository;
@@ -15,6 +13,7 @@ import io.turntabl.orderservice.repositories.WalletRepository;
 import io.turntabl.orderservice.requests.MalonOrderRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.connection.Message;
 import org.springframework.data.redis.connection.MessageListener;
@@ -24,6 +23,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -103,7 +104,7 @@ public class RedisMessageListenerImpl implements MessageListener {
 
         double buyPrice = Math.min(exchangeOneData.getAskPrice(), exchangeTwoData.getAskPrice());
 
-        sendOrderToExchange(receivedOrder,exchangeDto);
+        sendOrderToExchange(receivedOrder,exchangeDto, receivedOrder.getQuantity());
 
     }
 
@@ -129,11 +130,11 @@ public class RedisMessageListenerImpl implements MessageListener {
             return;
         }
 
-        sendOrderToExchange(receivedOrder,exchangeDto);
+        sendOrderToExchange(receivedOrder,exchangeDto, receivedOrder.getQuantity());
 
     }
 
-    private void sendOrderToExchange(Order order, ExchangeDto exchangeDto) {
+    private void sendOrderToExchange(Order order, ExchangeDto exchangeDto, int quantity) {
 
         MalonOrderRequest malonOrderRequest = MalonOrderRequest.fromOrder(order);
 
@@ -148,14 +149,13 @@ public class RedisMessageListenerImpl implements MessageListener {
 
         Optional<String> body = Optional.ofNullable(response.getBody());
 
-        log.info("response {}", response.getBody());
-        log.info("code {}", response.getStatusCode());
 
         if (response.getStatusCode().is2xxSuccessful()) {
 
             String orderId = body.orElse("").substring(1, response.getBody().length()-1);
 
-            order.setOrderId(orderId);
+            order.getOrderInformation().add(new OrderInformationDto(exchangeDto.getBaseUrl(), orderId, quantity, 0, OrderItemStatus.PENDING));
+
             order.setStatus(OrderStatus.PROCESSING);
 
             orderRepository.save(order);
