@@ -14,4 +14,8 @@ public class ExchangeDto {
     private String baseUrl;
     private boolean isActive;
 
+    public ExchangeDto(String baseUrl) {
+        this.baseUrl = baseUrl;
+    }
+
 }

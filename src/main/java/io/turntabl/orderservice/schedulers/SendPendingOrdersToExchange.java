@@ -34,7 +34,7 @@ public class SendPendingOrdersToExchange {
     private ChannelTopic topic;
 
 
-    @Scheduled(cron = "*/1 * * * * *")
+//    @Scheduled(cron = "*/1 * * * * *")
     public void sendPendingOrders() {
         List<OrderDto> orders = orderService.findOrdersByStatus(OrderStatus.PENDING.toString());
 

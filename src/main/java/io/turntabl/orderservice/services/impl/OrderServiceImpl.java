@@ -3,10 +3,15 @@ package io.turntabl.orderservice.services.impl;
 import com.google.gson.Gson;
 import io.turntabl.orderservice.constants.OrderItemStatus;
 import io.turntabl.orderservice.constants.OrderStatus;
+import io.turntabl.orderservice.constants.Side;
 import io.turntabl.orderservice.dtos.OrderDto;
 import io.turntabl.orderservice.dtos.OrderInformationDto;
+import io.turntabl.orderservice.dtos.PortfolioDto;
+import io.turntabl.orderservice.exceptions.OrderNotFoundException;
 import io.turntabl.orderservice.models.Order;
+import io.turntabl.orderservice.models.Wallet;
 import io.turntabl.orderservice.repositories.OrderRepository;
+import io.turntabl.orderservice.repositories.WalletRepository;
 import io.turntabl.orderservice.requests.OrderRequest;
 import io.turntabl.orderservice.services.OrderService;
 import lombok.AllArgsConstructor;
@@ -33,6 +38,8 @@ public class OrderServiceImpl implements OrderService {
 
     private final ChannelTopic topic;
 
+    private final WalletRepository walletRepository;
+
 
     @Override
     public OrderDto createOrder(String userId, OrderRequest orderRequest) {
@@ -53,7 +60,14 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public OrderDto updateOrder(String id, String userId, OrderRequest orderRequest) {
-        return null;
+        Order order = orderRepository.findByIdAndUserId(userId).orElseThrow(() ->
+                new OrderNotFoundException(String.format("order with id %s does not exists", id)));
+
+        // update order
+
+        order = orderRepository.save(order);
+
+        return OrderDto.fromModel(order);
     }
 
     @Override
@@ -82,6 +96,8 @@ public class OrderServiceImpl implements OrderService {
                 .findFirst()
                 .orElse(new OrderInformationDto());
 
+        log.info("item {}", orderItem);
+
         orderItem.setOrderId(orderId);
         orderItem.setStatus(status);
         orderItem.setQuantityFulfilled(quantityFulfilled == -1 ? orderItem.getQuantity() : quantityFulfilled);
@@ -100,13 +116,52 @@ public class OrderServiceImpl implements OrderService {
         actualOrder.setOrderInformation(items);
 
 
-        long fulfilledItems = actualOrder.getOrderInformation().stream().filter(x -> x.getStatus() == OrderItemStatus.FULFILLED).count();
+        long fulfilledItems = actualOrder
+                .getOrderInformation()
+                .stream().filter(x -> x.getStatus() == OrderItemStatus.FULFILLED)
+                .count();
 
         if (fulfilledItems == actualOrder.getOrderInformation().size()) {
+
             actualOrder.setStatus(OrderStatus.FULFILLED);
+
+            /*
+                update portfolio
+             */
+            Wallet wallet = walletRepository.findByUserId(actualOrder.getUserId()).orElse(new Wallet());
+
+
+            PortfolioDto portfolio = wallet
+                    .getPortfolios()
+                    .stream()
+                    .filter(x -> x.getTicker().equals(actualOrder.getTicker()))
+                    .findFirst()
+                    .orElse(new PortfolioDto());
+
+            portfolio.setTicker(actualOrder.getTicker());
+
+            int quantity = actualOrder.getSide() == Side.SELL ? portfolio.getQuantity() - actualOrder.getQuantity()
+                    : portfolio.getQuantity() + actualOrder.getQuantity();
+
+            portfolio.setQuantity(quantity);
+
+            List<PortfolioDto> updatePortfolios = wallet
+                    .getPortfolios()
+                    .stream()
+                    .filter(p -> !p.getTicker().equals(portfolio.getTicker()))
+                    .collect(Collectors.toList());
+
+            updatePortfolios.add(portfolio);
+
+            wallet.setPortfolios(updatePortfolios);
+
+            walletRepository.save(wallet);
+
+
         }
 
         orderRepository.save(actualOrder);
+
 
     }
 

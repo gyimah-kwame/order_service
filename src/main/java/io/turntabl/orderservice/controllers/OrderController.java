@@ -33,6 +33,17 @@ public class OrderController {
         return orderService.getAllOrders(principal.getSubject());
     }
 
+    @PutMapping("/orders/{id}")
+    public OrderDto updateOrder(@PathVariable String id, @RequestBody OrderRequest orderRequest, @AuthenticationPrincipal Jwt principal) {
+        return orderService.updateOrder(id, principal.getSubject(), orderRequest);
+    }
+
+    @DeleteMapping("/orders/{id}")
+    @ResponseStatus(code = HttpStatus.NO_CONTENT)
+    public void cancelOrder(@PathVariable String id,  @AuthenticationPrincipal Jwt principal) {
+        orderService.deleteOrder(id, principal.getSubject());
+    }
+
 
 
 

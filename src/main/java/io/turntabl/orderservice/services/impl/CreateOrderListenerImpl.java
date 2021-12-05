@@ -29,7 +29,7 @@ import java.util.Optional;
 
 @Service
 @Slf4j
-public class RedisMessageListenerImpl implements MessageListener {
+public class CreateOrderListenerImpl implements MessageListener {
 
     @Autowired
     private OrderRepository orderRepository;
@@ -68,13 +68,17 @@ public class RedisMessageListenerImpl implements MessageListener {
         ExchangeDto exchangeOne = gson.fromJson(exchangeOneStr, ExchangeDto.class);
         ExchangeDto exchangeTwo = gson.fromJson(exchangeTwoStr, ExchangeDto.class);
 
+        log.info("aa {}", exchangeOne);
+
         // keys to retrieve best prices from redis
         String exchangeOneKey = receivedOrder.getTicker()+"_"+exchangeOne.getId();
         String exchangeTwoKey = receivedOrder.getTicker()+"_"+exchangeTwo.getId();
 
+
         //get objects with best prices
         MarketDataDto exchangeOneData = gson.fromJson(hashOperations.get(exchangeOneKey, exchangeOneKey), MarketDataDto.class);
         MarketDataDto exchangeTwoData = gson.fromJson(hashOperations.get(exchangeTwoKey, exchangeTwoKey), MarketDataDto.class);
+
 
         if (receivedOrder.getSide() == Side.BUY) {
             buyOperation(receivedOrder, exchangeOneData, exchangeTwoData, exchangeOne);
@@ -86,23 +90,25 @@ public class RedisMessageListenerImpl implements MessageListener {
 
     private void buyOperation(Order receivedOrder, MarketDataDto exchangeOneData, MarketDataDto exchangeTwoData, ExchangeDto exchangeDto) {
 
-        double totalBuyLimit = exchangeOneData.getBuyLimit() + exchangeTwoData.getBuyLimit();
+//        double totalBuyLimit = exchangeOneData.getBuyLimit() + exchangeTwoData.getBuyLimit();
+//
+//        double price = receivedOrder.getPrice() * receivedOrder.getQuantity();
+//
+//        // if side is sell, check if user owns more or equal to the quantity of products being sold
+//        Wallet wallet = walletRepository.findByUserId(receivedOrder.getUserId()).orElse(new Wallet());
+//
+//
+//        if (wallet.getBalance() < price) {
+//            return;
+//        }
+//
+//        //perform limit checking on buy
+//        if (totalBuyLimit != 0 && receivedOrder.getQuantity() > totalBuyLimit) {
+//            return;
+//        }
 
-        double price = receivedOrder.getPrice() * receivedOrder.getQuantity();
+        double buyPrice = Math.min(exchangeOneData.getAskPrice(), exchangeTwoData.getAskPrice());;
 
-        // if side is sell, check if user owns more or equal to the quantity of products being sold
-        Wallet wallet = walletRepository.findByUserId(receivedOrder.getUserId()).orElse(new Wallet());
-
-        if (wallet.getBalance() < price) {
-            return;
-        }
-
-        //perform limit checking on buy
-        if (receivedOrder.getQuantity() > totalBuyLimit) {
-            return;
-        }
-
-        double buyPrice = Math.min(exchangeOneData.getAskPrice(), exchangeTwoData.getAskPrice());
 
         sendOrderToExchange(receivedOrder,exchangeDto, receivedOrder.getQuantity());
 
@@ -117,24 +123,29 @@ public class RedisMessageListenerImpl implements MessageListener {
         Wallet wallet = walletRepository.findByUserId(receivedOrder.getUserId()).orElse(new Wallet());
 
         //perform limit checking on sell
-        if (receivedOrder.getQuantity() > totalSellLimit) {
-            return;
-        }
+//        if (receivedOrder.getQuantity() > totalSellLimit) {
+//            return;
+//        }
+
 
         Optional<PortfolioDto> portfolio = wallet.getPortfolios()
                 .stream()
                 .filter(x -> x.getTicker().equalsIgnoreCase(receivedOrder.getTicker()) && x.getQuantity() >= receivedOrder.getQuantity())
                 .findFirst();
 
-        if (portfolio.isEmpty()) {
-            return;
-        }
+//        if (portfolio.isEmpty()) {
+//            return;
+//        }
 
         sendOrderToExchange(receivedOrder,exchangeDto, receivedOrder.getQuantity());
 
     }
 
     private void sendOrderToExchange(Order order, ExchangeDto exchangeDto, int quantity) {
+
+        if (order.getStatus() == OrderStatus.PROCESSING) return;
+
+        log.info("sending to exchange {}", exchangeDto.getBaseUrl());
 
         MalonOrderRequest malonOrderRequest = MalonOrderRequest.fromOrder(order);
 
