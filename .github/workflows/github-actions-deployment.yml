@@ -30,7 +30,7 @@ jobs:
           PORT: "22"
           PASSWORD: "O9b21Tv^i!in"
         with:
-          source: "./order-service-0.0.1-SNAPSHOT.jar"
+          source: "./target/order-service-0.0.1-SNAPSHOT.jar"
           target: "/opt/order_service/order-service-0.0.1-SNAPSHOT.jar"
 
       - name: Restart order service
