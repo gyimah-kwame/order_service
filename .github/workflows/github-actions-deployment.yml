@@ -40,6 +40,8 @@ jobs:
           USERNAME: "root"
           PORT: "22"
           PASSWORD: "O9b21Tv^i!in"
-          script: supervisorctl restart all
+          script: |
+            mv /tmp/order/target/order-service-0.0.1-SNAPSHOT.jar  /opt/order_service/order-service-0.0.1-SNAPSHOT.jar
+            supervisorctl restart all
 
 
