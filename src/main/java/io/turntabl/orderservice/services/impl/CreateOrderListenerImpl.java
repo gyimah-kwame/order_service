@@ -52,7 +52,7 @@ public class CreateOrderListenerImpl implements MessageListener {
 
     @Override
     public void onMessage(Message message, byte[] pattern) {
-        log.info("{}", message.toString());
+        log.info("create topic {}", message.toString());
 
         Optional<Order> order = orderRepository.findById(message.toString());
 

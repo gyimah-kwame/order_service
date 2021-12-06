@@ -12,7 +12,7 @@ public interface OrderRepository extends MongoRepository<Order, String> {
 
     List<Order> findByUserId(String userId);
 
-    Optional<Order> findByIdAndUserId(String userId);
+    Optional<Order> findByIdAndUserId(String id, String userId);
 
     List<Order> findByStatus(String status);
 

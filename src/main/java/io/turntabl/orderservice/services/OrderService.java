@@ -16,7 +16,7 @@ public interface OrderService {
 
     List<OrderDto> findOrdersByStatus(String status);
 
-    Boolean deleteOrder(String id, String userId);
+    void deleteOrder(String id, String userId);
 
 
     void updateOrderStatus(String orderId, String orderItemId, OrderItemStatus status, int quantityFulfilled);

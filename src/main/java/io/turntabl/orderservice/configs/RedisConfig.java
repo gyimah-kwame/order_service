@@ -54,12 +54,12 @@ public class RedisConfig {
         return container;
     }
 
-    @Bean
+    @Bean("createTopic")
     public ChannelTopic topic() {
         return new ChannelTopic(topic);
     }
 
-    @Bean
+    @Bean("updateTopic")
     public ChannelTopic updateOrderTopic() {
         return new ChannelTopic("updateOrder");
     }

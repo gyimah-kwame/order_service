@@ -5,6 +5,7 @@ import io.turntabl.orderservice.dtos.OrderDto;
 import io.turntabl.orderservice.services.OrderService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
@@ -30,6 +31,7 @@ public class SendPendingOrdersToExchange {
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
 
+    @Qualifier("createTopic")
     @Autowired
     private ChannelTopic topic;
 

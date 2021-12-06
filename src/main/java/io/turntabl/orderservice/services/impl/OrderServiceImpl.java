@@ -16,6 +16,8 @@ import io.turntabl.orderservice.requests.OrderRequest;
 import io.turntabl.orderservice.services.OrderService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
@@ -28,17 +30,25 @@ import java.util.stream.Collectors;
 
 @Service
 @Transactional
-@AllArgsConstructor
 @Slf4j
 public class OrderServiceImpl implements OrderService {
 
-    private final OrderRepository orderRepository;
+    @Autowired
+    private OrderRepository orderRepository;
 
-    private final StringRedisTemplate stringRedisTemplate;
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
 
-    private final ChannelTopic topic;
+    @Qualifier("createTopic")
+    @Autowired
+    private ChannelTopic topic;
 
-    private final WalletRepository walletRepository;
+    @Qualifier("updateTopic")
+    @Autowired
+    private ChannelTopic updateTopic;
+
+    @Autowired
+    private WalletRepository walletRepository;
 
 
     @Override
@@ -60,12 +70,12 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public OrderDto updateOrder(String id, String userId, OrderRequest orderRequest) {
-        Order order = orderRepository.findByIdAndUserId(userId).orElseThrow(() ->
+        Order order = orderRepository.findByIdAndUserId(id, userId).orElseThrow(() ->
                 new OrderNotFoundException(String.format("order with id %s does not exists", id)));
 
-        // update order
-
         order = orderRepository.save(order);
+
+        stringRedisTemplate.convertAndSend(updateTopic.getTopic(), order.getId());
 
         return OrderDto.fromModel(order);
     }
@@ -76,8 +86,13 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public Boolean deleteOrder(String id, String userId) {
-        return null;
+    public void deleteOrder(String id, String userId) {
+        Order order = orderRepository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new OrderNotFoundException(String.format("order with id %s does not exists", id)));
+
+//        if (order.getStatus() != OrderStatus.PENDING) throw new
+
+        orderRepository.delete(order);
     }
 
     @Override
