@@ -16,6 +16,8 @@ public interface OrderService {
 
     List<OrderDto> findOrdersByStatus(String status);
 
+    List<OrderDto> getUserOrdersByStatus(String userId, String status);
+
     void deleteOrder(String id, String userId);
 
 
