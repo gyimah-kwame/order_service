@@ -1,12 +1,11 @@
 package io.turntabl.orderservice.requests;
 
-import io.turntabl.orderservice.constants.Side;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import javax.validation.constraints.Min;
-import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
 
 @NoArgsConstructor
@@ -14,8 +13,8 @@ import javax.validation.constraints.NotNull;
 @AllArgsConstructor
 public class OrderRequest {
 
-    @NotNull
-    private Side side;
+    @NotEmpty
+    private String side;
 
     @NotNull
     private Double price;
@@ -24,7 +23,7 @@ public class OrderRequest {
     @NotNull
     private int quantity;
 
-    @NotBlank
+    @NotEmpty
     private String ticker;
 
 }

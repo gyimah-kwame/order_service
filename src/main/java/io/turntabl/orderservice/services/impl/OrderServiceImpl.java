@@ -55,7 +55,7 @@ public class OrderServiceImpl implements OrderService {
     public OrderDto createOrder(String userId, OrderRequest orderRequest) {
         Order order = new Order();
         order.setUserId(userId);
-        order.setSide(orderRequest.getSide());
+        order.setSide(Side.valueOf(orderRequest.getSide().toUpperCase()));
         order.setQuantity(orderRequest.getQuantity());
         order.setTicker(orderRequest.getTicker());
         order.setPrice(orderRequest.getPrice());
@@ -63,7 +63,7 @@ public class OrderServiceImpl implements OrderService {
 
         OrderDto orderDto = OrderDto.fromModel(orderRepository.save(order));
 
-        stringRedisTemplate.convertAndSend(topic.getTopic(), orderDto.getId());
+//        stringRedisTemplate.convertAndSend(topic.getTopic(), orderDto.getId());
 
         return orderDto;
     }
@@ -73,16 +73,24 @@ public class OrderServiceImpl implements OrderService {
         Order order = orderRepository.findByIdAndUserId(id, userId).orElseThrow(() ->
                 new OrderNotFoundException(String.format("order with id %s does not exists", id)));
 
+        order.setPrice(orderRequest.getPrice());
+        order.setQuantity(orderRequest.getQuantity());
+
         order = orderRepository.save(order);
 
-        stringRedisTemplate.convertAndSend(updateTopic.getTopic(), order.getId());
+//        stringRedisTemplate.convertAndSend(updateTopic.getTopic(), order.getId());
 
         return OrderDto.fromModel(order);
     }
 
     @Override
     public List<OrderDto> findOrdersByStatus(String status) {
-        return orderRepository.findByStatus(OrderStatus.PENDING.toString()).stream().map(OrderDto::fromModel).collect(Collectors.toList());
+        return orderRepository.findByStatus(status).stream().map(OrderDto::fromModel).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<OrderDto> getUserOrdersByStatus(String userId, String status) {
+        return orderRepository.findByUserIdAndStatus(userId, status.toUpperCase()).stream().map(OrderDto::fromModel).collect(Collectors.toList());
     }
 
     @Override
@@ -90,9 +98,14 @@ public class OrderServiceImpl implements OrderService {
         Order order = orderRepository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new OrderNotFoundException(String.format("order with id %s does not exists", id)));
 
-//        if (order.getStatus() != OrderStatus.PENDING) throw new
-
         orderRepository.delete(order);
+    }
+
+    @Override
+    public List<OrderDto> getAllOrders(String userId) {
+        return orderRepository.findByUserId(userId).stream()
+                .map(OrderDto::fromModel)
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -180,10 +193,4 @@ public class OrderServiceImpl implements OrderService {
 
     }
 
-    @Override
-    public List<OrderDto> getAllOrders(String userId) {
-        return orderRepository.findByUserId(userId).stream()
-                .map(OrderDto::fromModel)
-                .collect(Collectors.toList());
-    }
 }
