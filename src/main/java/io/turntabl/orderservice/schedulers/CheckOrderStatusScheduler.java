@@ -43,7 +43,7 @@ public class CheckOrderStatusScheduler {
     @Autowired
     private OrderRepository orderRepository;
 
-    @Scheduled(cron = "*/2 * * * * *")
+//    @Scheduled(cron = "*/2 * * * * *")
     public void checkOrderStatus() {
 
         List<Order> orders = orderRepository.findByStatus(OrderStatus.PROCESSING.toString());

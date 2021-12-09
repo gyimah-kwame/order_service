@@ -22,7 +22,7 @@ public class WalletServiceImpl implements WalletService {
 
     @Override
     public WalletDto createWallet(String userId) {
-        Optional<Wallet> userWallet = walletRepository.findByUserId(userId);
+        Optional<Wallet> userWallet = walletRepository.findById(userId);
         Wallet wallet = userWallet.orElse(new Wallet(userId, 10_000.00, new ArrayList<>()));
         log.info("Returning Wallet Information for {}", userId);
         return WalletDto.fromModel(walletRepository.save(wallet));
@@ -30,7 +30,7 @@ public class WalletServiceImpl implements WalletService {
 
     @Override
     public List<PortfolioDto> getUserPortfolios(String userId) {
-        Optional<Wallet> userWallet = walletRepository.findByUserId(userId);
+        Optional<Wallet> userWallet = walletRepository.findById(userId);
 
         Wallet wallet = userWallet.orElse(new Wallet(userId, 10_000.00, new ArrayList<>()));
 

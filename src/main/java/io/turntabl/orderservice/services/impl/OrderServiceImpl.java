@@ -43,9 +43,6 @@ public class OrderServiceImpl implements OrderService {
     @Autowired
     private ChannelTopic topic;
 
-    @Qualifier("updateTopic")
-    @Autowired
-    private ChannelTopic updateTopic;
 
     @Autowired
     private WalletRepository walletRepository;
@@ -63,7 +60,7 @@ public class OrderServiceImpl implements OrderService {
 
         OrderDto orderDto = OrderDto.fromModel(orderRepository.save(order));
 
-//        stringRedisTemplate.convertAndSend(topic.getTopic(), orderDto.getId());
+        stringRedisTemplate.convertAndSend(topic.getTopic(), orderDto.getId());
 
         return orderDto;
     }
@@ -156,7 +153,7 @@ public class OrderServiceImpl implements OrderService {
             /*
                 update portfolio
              */
-            Wallet wallet = walletRepository.findByUserId(actualOrder.getUserId()).orElse(new Wallet());
+            Wallet wallet = walletRepository.findById(actualOrder.getUserId()).orElse(new Wallet());
 
 
             PortfolioDto portfolio = wallet

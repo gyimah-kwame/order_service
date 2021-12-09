@@ -33,10 +33,10 @@ public class RedisConfig {
         return new CreateOrderListenerImpl();
     }
 
-    @Bean("update")
-    public MessageListenerAdapter updateMessageListener() {
-        return new MessageListenerAdapter(updateOrderListener());
-    }
+//    @Bean("update")
+//    public MessageListenerAdapter updateMessageListener() {
+//        return new MessageListenerAdapter(updateOrderListener());
+//    }
 
     @Bean
     public UpdateOrderListenerImpl updateOrderListener() {
@@ -45,12 +45,11 @@ public class RedisConfig {
 
     @Bean
     RedisMessageListenerContainer container(RedisConnectionFactory connectionFactory,
-                                            @Qualifier("create") MessageListenerAdapter listenerAdapter,
-                                            @Qualifier("update") MessageListenerAdapter updateListenerAdapter) {
+                                            @Qualifier("create") MessageListenerAdapter listenerAdapter) {
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
         container.setConnectionFactory(connectionFactory);
         container.addMessageListener(listenerAdapter, topic());
-        container.addMessageListener(updateListenerAdapter, updateOrderTopic());
+//        container.addMessageListener(updateListenerAdapter, updateOrderTopic());
         return container;
     }
 
@@ -59,9 +58,9 @@ public class RedisConfig {
         return new ChannelTopic(topic);
     }
 
-    @Bean("updateTopic")
-    public ChannelTopic updateOrderTopic() {
-        return new ChannelTopic("updateOrder");
-    }
+//    @Bean("updateTopic")
+//    public ChannelTopic updateOrderTopic() {
+//        return new ChannelTopic("updateOrder");
+//    }
 
 }
