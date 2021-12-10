@@ -24,4 +24,6 @@ public interface OrderService {
     void updateOrderStatus(String orderId, String orderItemId, OrderItemStatus status, int quantityFulfilled);
 
     List<OrderDto> getAllOrders(String userId);
+
+    List<OrderDto> findTotalOrders();
 }
