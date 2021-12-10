@@ -9,5 +9,5 @@ import java.util.List;
 
 @Repository
 public interface MicrosoftRepository extends ElasticsearchRepository<Microsoft, String> {
-    List<Microsoft> findBySideOrderByPriceAsc(String side);
+    List<Microsoft> findTop25BySideOrderByPriceAsc(String side);
 }

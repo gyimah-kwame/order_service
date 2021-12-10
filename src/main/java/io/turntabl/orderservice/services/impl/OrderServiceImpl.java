@@ -106,6 +106,11 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    public OrderDto findById(String orderId) {
+        return OrderDto.fromModel(orderRepository.findById(orderId).orElse(new Order()));
+    }
+
+    @Override
     public void updateOrderStatus(String orderId, String orderItemId, OrderItemStatus status, int quantityFulfilled) {
         Optional<Order> order = orderRepository.findById(orderId);
 

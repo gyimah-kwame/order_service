@@ -113,53 +113,63 @@ public class CreateOrderListenerImpl implements MessageListener {
          * 3. Executions to exchange should be bound to single order
          * NB: Keep track of execution price and order
          */
-        Wallet wallet = walletRepository.findById(receivedOrder.getUserId())
-                .orElseThrow(() -> new WalletNotFoundException("Wallet information for " + receivedOrder.getUserId() + " not found"));
+        try{
+            Wallet wallet = walletRepository.findById(receivedOrder.getUserId())
+                    .orElseThrow(() -> new WalletNotFoundException("Wallet information for " + receivedOrder.getUserId() + " not found", receivedOrder.getId()));
+            if (wallet.getBalance() >= receivedOrder.getQuantity() * receivedOrder.getPrice() ){
+                if (receivedOrder.getPrice() <=
+                        exchangeOneData.getLastTradedPrice() + exchangeOneData.getMaxPriceShift()
+                        ||
+                        receivedOrder.getPrice() <=
+                                exchangeTwoData.getLastTradedPrice() + exchangeOneData.getMaxPriceShift()
 
-        if (wallet.getBalance() >= receivedOrder.getQuantity() * receivedOrder.getPrice() ){
-            if (receivedOrder.getPrice() <=
-                    exchangeOneData.getLastTradedPrice() + exchangeOneData.getMaxPriceShift()
-                    ||
-                receivedOrder.getPrice() <=
-                        exchangeTwoData.getLastTradedPrice() + exchangeOneData.getMaxPriceShift()
+                ){
+                    // Reach into Search for sum of quantities available that matches the quantity to be traded
+                    List<? extends Ticker> tickers = findAppropriateTickerInformationFromOrder(receivedOrder, exchangeOne,exchangeTwo);
+                    // Publish information to exchange
 
-            ){
-               // Reach into Search for sum of quantities available that matches the quantity to be traded
-               List<? extends Ticker> tickers = findAppropriateTickerInformationFromOrder(receivedOrder, exchangeOne,exchangeTwo);
-               // Publish information to exchange
-               // todo: Check exact quantity to be sent
+                    int quantitySent = 0;
+                    for (Ticker ticker : tickers) {
+                        if (quantitySent < receivedOrder.getQuantity() )   {
+                            log.info("{}", ticker);
+                            log.info("{}", quantitySent);
+                            log.info("{}", receivedOrder);
 
-                int quantitySent = 0;
-                for (Ticker ticker : tickers) {
-                   if (quantitySent < receivedOrder.getQuantity() )   {
+                            if(ticker.getQuantity() > (receivedOrder.getQuantity() - quantitySent)){
+                                log.info("{}",(receivedOrder.getQuantity() - quantitySent));
+                                sendOrderToExchange(
+                                        receivedOrder,
+                                        exchangeOne
+                                                .getBaseUrl()
+                                                .equalsIgnoreCase(ticker.getExchangeURL())
+                                                ? exchangeOne : exchangeTwo,
+                                        (receivedOrder.getQuantity() - quantitySent)
+                                );
+                                quantitySent += (receivedOrder.getQuantity() - quantitySent) ;
+                            }else {
+                                log.info("{}",ticker.getQuantity());
+                                sendOrderToExchange(
+                                        receivedOrder,
+                                        exchangeOne
+                                                .getBaseUrl()
+                                                .equalsIgnoreCase(ticker.getExchangeURL())
+                                                ? exchangeOne : exchangeTwo,
+                                        ticker.getQuantity()
+                                );
+                                quantitySent += ticker.getQuantity();
+                            }
+                        }
+                    }
 
-                       if(ticker.getQuantity() > (receivedOrder.getQuantity() - quantitySent)){
-                           sendOrderToExchange(
-                                   receivedOrder,
-                                   exchangeOne
-                                           .getBaseUrl()
-                                           .equalsIgnoreCase(ticker.getExchangeURL())
-                                           ? exchangeOne : exchangeTwo,
-                                   (receivedOrder.getQuantity() - quantitySent)
-                           );
-                           quantitySent += (receivedOrder.getQuantity() - quantitySent) ;
-                       }else {
-                           sendOrderToExchange(
-                                   receivedOrder,
-                                   exchangeOne
-                                           .getBaseUrl()
-                                           .equalsIgnoreCase(ticker.getExchangeURL())
-                                           ? exchangeOne : exchangeTwo,
-                                   ticker.getQuantity()
-                           );
-                           quantitySent += ticker.getQuantity();
-                       }
-                  }
+
                 }
-
 
             }
 
+        }catch (WalletNotFoundException e){
+            Order order = orderRepository.findById(e.getOrderId()).orElse(new Order());
+            order.setStatus(OrderStatus.INVALID);
+            orderRepository.save(order);
         }
 
     }
@@ -167,7 +177,7 @@ public class CreateOrderListenerImpl implements MessageListener {
     private List<? extends Ticker> findAppropriateTickerInformationFromOrder(Order receivedOrder, ExchangeDto exchangeOne, ExchangeDto exchangeTwo) {
         List<? extends Ticker> items;
         switch (receivedOrder.getTicker()){
-            case "MSFT": items = microsoftRepository.findBySideOrderByPriceAsc(Side.SELL.name());
+            case "MSFT": items = microsoftRepository.findTop25BySideOrderByPriceAsc(Side.SELL.name());
                 break;
             case "NFLX": items = netflixRepository.findBySideOrderByPriceAsc(Side.SELL.name());
                 break;

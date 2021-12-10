@@ -1,7 +1,10 @@
 package io.turntabl.orderservice.exceptions;
 
 import io.turntabl.orderservice.constants.OrderItemStatus;
+import io.turntabl.orderservice.constants.OrderStatus;
+import io.turntabl.orderservice.dtos.OrderDto;
 import io.turntabl.orderservice.models.Order;
+import io.turntabl.orderservice.repositories.OrderRepository;
 import io.turntabl.orderservice.responses.ValidationErrorResponse;
 import io.turntabl.orderservice.services.OrderService;
 import lombok.AllArgsConstructor;
@@ -26,6 +29,8 @@ import java.util.*;
 public class ControllerAdvisor  extends ResponseEntityExceptionHandler{
 
     private final OrderService  orderService;
+
+    private final OrderRepository orderRepository;
 
     @Override
     protected ResponseEntity<Object>  handleMethodArgumentNotValid( MethodArgumentNotValidException ex, HttpHeaders headers,
