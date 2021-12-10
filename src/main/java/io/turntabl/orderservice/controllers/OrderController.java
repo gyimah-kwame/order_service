@@ -34,7 +34,7 @@ public class OrderController {
     }
 
     @GetMapping("/orders/all")
-    public List<OrderDto> getTotalOrders( @AuthenticationPrincipal Jwt principal) {
+    public List<OrderDto> getTotalOrders() {
         return orderService.findTotalOrders();
     }
 
