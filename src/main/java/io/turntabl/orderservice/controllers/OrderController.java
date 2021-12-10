@@ -33,6 +33,11 @@ public class OrderController {
         return orderService.getAllOrders(principal.getSubject());
     }
 
+    @GetMapping("/orders/all")
+    public List<OrderDto> getTotalOrders( @AuthenticationPrincipal Jwt principal) {
+        return orderService.findTotalOrders();
+    }
+
     @GetMapping("/orders/status/{status}")
     public List<OrderDto> getOrdersByStatus(@AuthenticationPrincipal Jwt principal, @PathVariable String status) {
         return orderService.getUserOrdersByStatus(principal.getSubject(), status);
