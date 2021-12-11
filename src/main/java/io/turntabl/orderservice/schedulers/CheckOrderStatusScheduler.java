@@ -1,30 +1,22 @@
 package io.turntabl.orderservice.schedulers;
 
-import io.turntabl.orderservice.constants.OrderItemStatus;
-import io.turntabl.orderservice.constants.OrderStatus;
+import io.turntabl.orderservice.enums.OrderItemStatus;
+import io.turntabl.orderservice.enums.OrderStatus;
 import io.turntabl.orderservice.exceptions.OrderStatusException;
 import io.turntabl.orderservice.models.Order;
 import io.turntabl.orderservice.repositories.OrderRepository;
 import io.turntabl.orderservice.responses.MalonOrderStatusResponse;
 import io.turntabl.orderservice.responses.OrderStatusResponse;
 import io.turntabl.orderservice.services.OrderService;
-import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
-import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Component
 @Slf4j

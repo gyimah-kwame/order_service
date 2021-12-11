@@ -1,7 +1,7 @@
 package io.turntabl.orderservice.models;
 
-import io.turntabl.orderservice.constants.OrderStatus;
-import io.turntabl.orderservice.constants.Side;
+import io.turntabl.orderservice.enums.OrderStatus;
+import io.turntabl.orderservice.enums.Side;
 import io.turntabl.orderservice.dtos.OrderDto;
 import io.turntabl.orderservice.dtos.OrderInformationDto;
 import lombok.AllArgsConstructor;

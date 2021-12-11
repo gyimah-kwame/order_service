@@ -1,4 +1,4 @@
-package io.turntabl.orderservice.constants;
+package io.turntabl.orderservice.enums;
 
 public enum OrderStatus {
     PENDING, PROCESSING,

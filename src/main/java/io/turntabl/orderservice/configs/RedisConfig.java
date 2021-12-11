@@ -23,8 +23,8 @@ public class RedisConfig {
         return new StringRedisTemplate(connectionFactory);
     }
 
-    @Bean("create")
-    public MessageListenerAdapter messageListener() {
+    @Bean("createOrderMessageListener")
+    public MessageListenerAdapter createOrderMessageListener() {
         return new MessageListenerAdapter(createOrderListener());
     }
 
@@ -33,11 +33,6 @@ public class RedisConfig {
         return new CreateOrderListenerImpl();
     }
 
-//    @Bean("update")
-//    public MessageListenerAdapter updateMessageListener() {
-//        return new MessageListenerAdapter(updateOrderListener());
-//    }
-
     @Bean
     public UpdateOrderListenerImpl updateOrderListener() {
         return new UpdateOrderListenerImpl();
@@ -45,22 +40,17 @@ public class RedisConfig {
 
     @Bean
     RedisMessageListenerContainer container(RedisConnectionFactory connectionFactory,
-                                            @Qualifier("create") MessageListenerAdapter listenerAdapter) {
+                                            @Qualifier("createOrderMessageListener") MessageListenerAdapter createOrderMessageListener) {
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
         container.setConnectionFactory(connectionFactory);
-        container.addMessageListener(listenerAdapter, topic());
+        container.addMessageListener(createOrderMessageListener, createOrderTopic());
 //        container.addMessageListener(updateListenerAdapter, updateOrderTopic());
         return container;
     }
 
-    @Bean("createTopic")
-    public ChannelTopic topic() {
+    @Bean("createOrderTopic")
+    public ChannelTopic createOrderTopic() {
         return new ChannelTopic(topic);
     }
-
-//    @Bean("updateTopic")
-//    public ChannelTopic updateOrderTopic() {
-//        return new ChannelTopic("updateOrder");
-//    }
 
 }

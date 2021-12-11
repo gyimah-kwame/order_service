@@ -1,7 +1,6 @@
 package io.turntabl.orderservice.responses;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.turntabl.orderservice.constants.Side;
 import lombok.Data;
 
 import java.util.List;

@@ -1,9 +1,6 @@
 package io.turntabl.orderservice.exceptions;
 
-import io.turntabl.orderservice.constants.OrderItemStatus;
-import io.turntabl.orderservice.constants.OrderStatus;
-import io.turntabl.orderservice.dtos.OrderDto;
-import io.turntabl.orderservice.models.Order;
+import io.turntabl.orderservice.enums.OrderItemStatus;
 import io.turntabl.orderservice.repositories.OrderRepository;
 import io.turntabl.orderservice.responses.ValidationErrorResponse;
 import io.turntabl.orderservice.services.OrderService;
@@ -12,11 +9,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 

@@ -1,21 +1,19 @@
 package io.turntabl.orderservice.services.impl;
 
 import com.google.gson.Gson;
-import io.turntabl.orderservice.constants.ExchangeName;
-import io.turntabl.orderservice.constants.OrderItemStatus;
-import io.turntabl.orderservice.constants.OrderStatus;
-import io.turntabl.orderservice.constants.Side;
+import io.turntabl.orderservice.enums.ExchangeName;
+import io.turntabl.orderservice.enums.OrderItemStatus;
+import io.turntabl.orderservice.enums.OrderStatus;
+import io.turntabl.orderservice.enums.Side;
 import io.turntabl.orderservice.dtos.*;
 import io.turntabl.orderservice.exceptions.WalletNotFoundException;
 import io.turntabl.orderservice.models.Order;
 import io.turntabl.orderservice.models.Wallet;
-import io.turntabl.orderservice.models.tickers.Microsoft;
 import io.turntabl.orderservice.models.tickers.Ticker;
 import io.turntabl.orderservice.repositories.OrderRepository;
 import io.turntabl.orderservice.repositories.WalletRepository;
 import io.turntabl.orderservice.repositories.tickers.*;
 import io.turntabl.orderservice.requests.MalonOrderRequest;
-import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
