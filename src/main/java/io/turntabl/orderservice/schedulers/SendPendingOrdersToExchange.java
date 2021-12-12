@@ -30,7 +30,7 @@ public class SendPendingOrdersToExchange {
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
 
-    @Qualifier("createTopic")
+    @Qualifier("createOrderTopic")
     @Autowired
     private ChannelTopic topic;
 

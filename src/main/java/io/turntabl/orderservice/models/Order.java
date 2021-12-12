@@ -20,7 +20,6 @@ import java.util.List;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-@ToString
 public class Order {
 
     @Id
@@ -37,10 +36,12 @@ public class Order {
     private Double price;
 
     private int quantity;
+    private int quantityProcessed;
 
     private String ticker;
 
     private OrderStatus status;
+    private String statusInfo;
 
     @Field(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();

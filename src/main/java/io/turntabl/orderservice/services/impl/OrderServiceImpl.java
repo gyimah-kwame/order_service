@@ -53,11 +53,20 @@ public class OrderServiceImpl implements OrderService {
         Order order = Order.fromDto(requestDTO);
         order.setStatus(OrderStatus.PENDING);
         OrderDto responseDTO = OrderDto.fromEntity(orderRepository.save(order));
+
+        // Ensuring Order is pesisted before publishing to topic for validation
         stringRedisTemplate.convertAndSend(createOrderTopic.getTopic(), responseDTO.getId());
+
         return responseDTO;
     }
 
 
+    /**
+     * @param existingOrderId refers tp tje existing order Id
+     * @param userId          the user id
+     * @param requestDTO refers to the incoming request dto
+     * @return orderDTO
+     */
     @Override
     public OrderDto updateOrder(String existingOrderId, String userId, OrderDto requestDTO) {
 
@@ -68,11 +77,17 @@ public class OrderServiceImpl implements OrderService {
         order.setQuantity(requestDTO.getQuantity());
 
         order = orderRepository.save(order);
+
+        //todo: Send order updated event
 //        stringRedisTemplate.convertAndSend(updateTopic.getTopic(), order.getId());
 
         return OrderDto.fromEntity(order);
     }
 
+    /**
+     * @param status the status
+     * @return
+     */
     @Override
     public List<OrderDto> findOrdersByStatus(String status) {
         return orderRepository.findByStatus(status)
@@ -110,21 +125,19 @@ public class OrderServiceImpl implements OrderService {
     // TODO: Refactor this block
     @Override
     public void updateOrderStatus(String orderId, String orderItemId, OrderItemStatus status, int quantityFulfilled) {
-        Optional<Order> order = orderRepository.findById(orderId);
-
-        if (order.isEmpty()) return;
-
-        Order actualOrder = order.get();
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(String.format("order with id %s does not exists", orderId)));
 
         /*
             find order item id
          */
-        OrderInformationDto orderItem = actualOrder.getOrderInformation()
+        OrderInformationDto orderItem = order.getOrderInformation()
                 .stream().filter(item -> item.getOrderId().equals(orderItemId))
                 .findFirst()
                 .orElse(new OrderInformationDto());
 
-        log.info("item {}", orderItem);
+        log.info("Updating Order Item {}", orderItem);
+
 
         orderItem.setOrderId(orderId);
         orderItem.setStatus(status);
@@ -133,43 +146,44 @@ public class OrderServiceImpl implements OrderService {
         /*
             find the other order items excluding the one we are updating
          */
-        List<OrderInformationDto> items = actualOrder.getOrderInformation()
+        List<OrderInformationDto> items = order.getOrderInformation()
                 .stream()
-                .filter(x -> !x.getOrderId().equals(orderItem.getOrderId()))
+                .filter(orderInfo -> !orderInfo.getOrderId().equals(orderItem.getOrderId()))
                 .collect(Collectors.toList());
 
         // add the updated order item to the list
         items.add(orderItem);
 
-        actualOrder.setOrderInformation(items);
+        // Update Order
+        order.setOrderInformation(items);
 
 
-        long fulfilledItems = actualOrder
+        long fulfilledItems = order
                 .getOrderInformation()
                 .stream().filter(x -> x.getStatus() == OrderItemStatus.FULFILLED)
                 .count();
 
-        if (fulfilledItems == actualOrder.getOrderInformation().size()) {
+        if (fulfilledItems == order.getOrderInformation().size()) {
 
-            actualOrder.setStatus(OrderStatus.FULFILLED);
+            order.setStatus(OrderStatus.FULFILLED);
 
             /*
                 update portfolio
              */
-            Wallet wallet = walletRepository.findById(actualOrder.getUserId()).orElse(new Wallet());
+            Wallet wallet = walletRepository.findById(order.getUserId()).orElse(new Wallet());
 
 
             PortfolioDto portfolio = wallet
                     .getPortfolios()
                     .stream()
-                    .filter(x -> x.getTicker().equals(actualOrder.getTicker()))
+                    .filter(x -> x.getTicker().equals(order.getTicker()))
                     .findFirst()
                     .orElse(new PortfolioDto());
 
-            portfolio.setTicker(actualOrder.getTicker());
+            portfolio.setTicker(order.getTicker());
 
-            int quantity = actualOrder.getSide() == Side.SELL ? portfolio.getQuantity() - actualOrder.getQuantity()
-                    : portfolio.getQuantity() + actualOrder.getQuantity();
+            int quantity = order.getSide() == Side.SELL ? portfolio.getQuantity() - order.getQuantity()
+                    : portfolio.getQuantity() + order.getQuantity();
 
             portfolio.setQuantity(quantity);
 
@@ -188,7 +202,7 @@ public class OrderServiceImpl implements OrderService {
 
         }
 
-        orderRepository.save(actualOrder);
+        orderRepository.save(order);
 
 
     }
