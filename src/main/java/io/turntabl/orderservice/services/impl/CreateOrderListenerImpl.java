@@ -90,8 +90,9 @@ public class CreateOrderListenerImpl implements MessageListener {
 
         try {
 
+            Order finalOrder = order;
             Wallet wallet = walletRepository.findById(order.getUserId())
-                    .orElseThrow(() -> new WalletNotFoundException("Wallet information for " + order.getUserId() + " not found", order.getId()));
+                    .orElseThrow(() -> new WalletNotFoundException("Wallet information for " + finalOrder.getUserId() + " not found", finalOrder.getId()));
 
             ExchangeDto exchangeOneDetails = getExchangeDetailsFromHash(ExchangeName.EXCHANGE_ONE);
             ExchangeDto exchangeTwoDetails = getExchangeDetailsFromHash(ExchangeName.EXCHANGE_TWO);
@@ -99,12 +100,14 @@ public class CreateOrderListenerImpl implements MessageListener {
             if (exchangeOneDetails.isActive() || exchangeTwoDetails.isActive()) {
                 switch (order.getSide()) {
                     case BUY:
-                        buyOperation(order, wallet, exchangeOneDetails, exchangeTwoDetails);
+                        order = buyOperation(order, wallet, exchangeOneDetails, exchangeTwoDetails);
                         break;
                     case SELL:
-                        sellOperation(order, wallet, exchangeOneDetails, exchangeTwoDetails);
+                        order = sellOperation(order, wallet, exchangeOneDetails, exchangeTwoDetails);
                         break;
                 }
+
+
             } else {
                 // Update order Status to PENDING with Message No Active Exchanges so a background process will process this if exchanges become available
                 order.setStatus(OrderStatus.PENDING);
@@ -114,9 +117,10 @@ public class CreateOrderListenerImpl implements MessageListener {
         }catch (WalletNotFoundException exception){
             order.setStatus(OrderStatus.INVALID);
             order.setStatusInfo(exception.getMessage() + "ORDER ID :" + exception.getOrderId());
-            orderRepository.save(order);
+            order = orderRepository.save(order);
         }
 
+        log.info("State of Order order: {}", order);
     }
 
     /**
@@ -128,7 +132,7 @@ public class CreateOrderListenerImpl implements MessageListener {
      * @param exchangeTwo   the exchange two
      */
     @Transactional
-    void buyOperation(Order receivedOrder, Wallet wallet, ExchangeDto exchangeOne, ExchangeDto exchangeTwo) {
+    Order  buyOperation(Order receivedOrder, Wallet wallet, ExchangeDto exchangeOne, ExchangeDto exchangeTwo) {
         /* 0. TODO: Verify Daily Buy Limit is not up. (We have a buy limit for each product)
          * 1. Verify User has sufficient funds
          * 2. Buy-executions should be in order by the lowest price in the market
@@ -140,17 +144,6 @@ public class CreateOrderListenerImpl implements MessageListener {
             if (wallet.getBalance() >= receivedOrder.getQuantity() * receivedOrder.getPrice() ){
                     // Reach into Search for sum of quantities available that matches the quantity to be traded
                     List<? extends Ticker> availableFinancialProductsOnMarket = findAppropriateTickerInformationFromOrderForBuyOperation(receivedOrder, exchangeOne,exchangeTwo);
-
-                    if (availableFinancialProductsOnMarket.isEmpty()){
-
-                        /* TODO: Provide Calculated Values for ticker
-                         * 1. Get The Latest Market Data from both exchanges
-                         * 2. Find Exchange with the lowest price for last sold | SELL ON ONLY VIABLE EXCHANGE
-                         * 3. Create tickers that are 10% and 15% less than the Market BID price
-                         * 4. Add them to the availableFinancialProductsOnMarket
-                         */
-
-                    }
 
                     // Publish information to exchange
                     int quantitySent = 0;
@@ -179,10 +172,8 @@ public class CreateOrderListenerImpl implements MessageListener {
                                         exchange,
                                         quantityToSend
                                 );
-
                                 receivedOrder.getOrderInformation()
                                         .add(new OrderInformationDto(exchange.getBaseUrl(), orderIdReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING));
-
                                 receivedOrder = orderRepository.save(receivedOrder);
                                 quantitySent += quantityToSend ;
 
@@ -216,12 +207,13 @@ public class CreateOrderListenerImpl implements MessageListener {
                 throw new InsufficientWalletBalanceException("Wallet balance is insufficient for the order");
             }
 
-        }catch (WalletNotFoundException | InsufficientWalletBalanceException exception){
+        }catch (InsufficientWalletBalanceException exception){
             receivedOrder.setStatus(OrderStatus.INVALID);
             receivedOrder.setStatusInfo(exception.getMessage());
-            orderRepository.save(receivedOrder);
+            receivedOrder = orderRepository.save(receivedOrder);
         }
 
+        return  receivedOrder;
     }
 
 
@@ -234,7 +226,7 @@ public class CreateOrderListenerImpl implements MessageListener {
      * @param exchangeTwo   the exchange two
      */
     @Transactional
-    void sellOperation(Order receivedOrder,Wallet wallet, ExchangeDto exchangeOne, ExchangeDto exchangeTwo) {
+    Order sellOperation(Order receivedOrder,Wallet wallet, ExchangeDto exchangeOne, ExchangeDto exchangeTwo) {
 
         /* 0. TODO: Verify Daily Buy Limit is not up. (We have a SELL limit for each product)
          * 1. Verify User owns the quantity of stock to be sold (Quantity to SELL )
@@ -242,59 +234,79 @@ public class CreateOrderListenerImpl implements MessageListener {
          * 3. Executions to exchange should be bound to single order
          * NB: Keep track of execution price and order
          */
+        try{
 
+            Order finalReceivedOrder = receivedOrder;
+            PortfolioDto itemToSell = wallet.getPortfolios()
+                    .stream()
+                    .filter(
+                            portfolioItem -> portfolioItem.getTicker()
+                                    .equalsIgnoreCase(finalReceivedOrder.getTicker()) &&
+                                    portfolioItem.getQuantity() >= finalReceivedOrder.getQuantity()
+                    )
+                    .findFirst()
+                    .orElseThrow(() ->
+                            new InvalidOrderException("Invalid Sell Operation. Insufficient Quantity of " + finalReceivedOrder.getTicker() + " in account")
+                    );
 
-        Order finalReceivedOrder = receivedOrder;
-        PortfolioDto itemToSell = wallet.getPortfolios()
-                .stream()
-                .filter(
-                        portfolioItem -> portfolioItem.getTicker()
-                        .equalsIgnoreCase(finalReceivedOrder.getTicker()) &&
-                        portfolioItem.getQuantity() >= finalReceivedOrder.getQuantity()
-                )
-                .findFirst().
-                orElseThrow(() ->
-                   new InvalidOrderException("Invalid Sell Operation. Insufficient Quantity of " + finalReceivedOrder.getTicker() + " in account")
-                );
+            List<? extends Ticker> availableFinancialProductsOnMarket = findAppropriateTickerInformationFromOrderForSellOperation(receivedOrder, exchangeOne, exchangeTwo);
+            /*
+             * 1. Put tickers into 2 groups based on Highest Demand
+             * 2. Check the exchange/exchanges involved
+             * TODO:
+             * 3. Put product to sell into 5 batches
+             * 4. Execute each batch with a different algorithm
+             *  ==== ALGOS
+             *    a) Sell first Batch at Highest price on market
+             *    b) Sell next batch at (Average of best 5 prices| A ) + (0.1 of A)321  q54R3EWQ    1
+             *    c) Sell  next batch at (A + MAX_PRICE_SHIFT | B ) - 0.3 B | Verify if greater than allowed price
+             *    d) Sell  next batch at (A + 0.17*A)
+             *    e) Sell  next batch at (A + 0.2*A)
+             */
 
-        List<? extends Ticker> availableFinancialProductsOnMarket = findAppropriateTickerInformationFromOrderForSellOperation(receivedOrder, exchangeOne, exchangeTwo);
-        /*
-         * 1. Put tickers into 2 groups based on Highest Demand
-         * 2. Check the exchange/exchanges involved
-         * TODO:
-         * 3. Put product to sell into 5 batches
-         * 4. Execute each batch with a different algorithm
-         *  ==== ALGOS
-         *    a) Sell first Batch at Highest price on market
-         *    b) Sell next batch at (Average of best 5 prices| A ) + (0.1 of A)321  q54R3EWQ    1
-         *    c) Sell  next batch at (A + MAX_PRICE_SHIFT | B ) - 0.3 B | Verify if greater than allowed price
-         *    d) Sell  next batch at (A + 0.17*A)
-         *    e) Sell  next batch at (A + 0.2*A)
-         */
-        if (availableFinancialProductsOnMarket.isEmpty()){
-           // Todo: Get latest info from Market Data and Generate some financial products based on it
+            for (Ticker marketProductForSale: availableFinancialProductsOnMarket) {
 
-        }
+                int quantitySent = 0;
+                ExchangeDto exchange = exchangeOne.getBaseUrl().equalsIgnoreCase(marketProductForSale.getExchangeURL()) ? exchangeOne : exchangeTwo;
 
-        for (Ticker marketProductForSale: availableFinancialProductsOnMarket) {
-            int quantitySent = 0;
-            ExchangeDto exchange = exchangeOne.getBaseUrl().equalsIgnoreCase(marketProductForSale.getExchangeURL()) ? exchangeOne : exchangeTwo;
+                if (quantitySent < receivedOrder.getQuantity() )   {
+                    receivedOrder.setStatus(OrderStatus.PROCESSING);
+                    receivedOrder.setStatusInfo("Order partially Processed");
+                    receivedOrder = orderRepository.save(receivedOrder);
 
-            if (quantitySent < receivedOrder.getQuantity() )   {
-                receivedOrder.setStatus(OrderStatus.PROCESSING);
-                receivedOrder.setStatusInfo("Order partially Processed");
-                receivedOrder = orderRepository.save(receivedOrder);
+                    int quantityToSend = receivedOrder.getQuantity() - quantitySent;
+                    if(marketProductForSale.getQuantity() > quantityToSend ){
+                        itemToSell.setQuantity(itemToSell.getQuantity() - quantityToSend);
+                        wallet = walletRepository.save(wallet);
+                        String idReturnedFromExchange = sendOrderToExchange(receivedOrder, marketProductForSale.getPrice(), exchange, quantityToSend);
+                        receivedOrder
+                                .getOrderInformation()
+                                .add(new OrderInformationDto(exchange.getBaseUrl(),
+                                        idReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING));
 
-                int quantityToSend = receivedOrder.getQuantity() - quantitySent;
-                if(marketProductForSale.getQuantity() > quantityToSend ){
-                    // Just Send Enough
+                    }else {
+                        itemToSell.setQuantity(receivedOrder.getQuantity());
+                        wallet = walletRepository.save(wallet);
+                        String idReturnedFromExchange = sendOrderToExchange(receivedOrder, marketProductForSale.getPrice(), exchange, marketProductForSale.getQuantity());
+                        receivedOrder
+                                .getOrderInformation()
+                                .add(new OrderInformationDto(exchange.getBaseUrl(),
+                                        idReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING));
+                    }
                 }else {
-                    // Send
+                    receivedOrder.setStatus(OrderStatus.PROCESSED);
+                    receivedOrder.setStatusInfo("Order processed");
+                    receivedOrder = orderRepository.save(receivedOrder);
                 }
+
             }
 
+        }catch (InvalidOrderException exception){
+            receivedOrder.setStatus(OrderStatus.INVALID);
+            receivedOrder.setStatusInfo(exception.getMessage());
+            receivedOrder = orderRepository.save(receivedOrder);
         }
-
+        return receivedOrder;
     }
 
     private String sendOrderToExchange(Order order,double price, ExchangeDto exchangeDto, int quantity) {
@@ -378,6 +390,16 @@ public class CreateOrderListenerImpl implements MessageListener {
                 break;
         }
 
+        if (items.isEmpty()){
+
+            /* TODO: Provide Calculated Values for ticker
+             * 1. Get The Latest Market Data from both exchanges
+             * 2. Find Exchange with the lowest price for last sold | SELL ON ONLY VIABLE EXCHANGE
+             * 3. Create tickers that are 10% and 15% less than the Market BID price
+             * 4. Add them to the availableFinancialProductsOnMarket
+             */
+        }
+
         // Get exact number needed for processing;
         return getTickers(receivedOrder, exchangeOne, exchangeTwo, items);
     }
@@ -413,6 +435,15 @@ public class CreateOrderListenerImpl implements MessageListener {
             default:
                 items = new ArrayList<>();
                 break;
+        }
+        if (items.isEmpty()){
+
+            /* TODO: Provide Calculated Values for ticker
+             * 1. Get The Latest Market Data from both exchanges
+             * 2. Find Exchange with the lowest price for last sold | SELL ON ONLY VIABLE EXCHANGE
+             * 3. Create tickers that are 10% and 15% less than the Market BID price
+             * 4. Add them to the availableFinancialProductsOnMarket
+             */
         }
 
         // Get exact number needed for processing;
@@ -458,6 +489,7 @@ public class CreateOrderListenerImpl implements MessageListener {
             if(quantity >= receivedOrder.getQuantity()) break;
 
         }
+
         return selectedItems;
 
  /*       AtomicInteger totalToBuy = new AtomicInteger();
