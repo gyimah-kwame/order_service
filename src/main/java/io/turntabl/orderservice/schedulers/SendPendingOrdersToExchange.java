@@ -21,8 +21,10 @@ public class SendPendingOrdersToExchange {
     @Autowired
     private WebClient webClient;
 
-    @Value("${matraining.token}")
-    private String apiKey;
+    @Value("${matraining.exchange.one.token}")
+    private String exchangeOneApiKey;
+    @Value("${matraining.exchange.two.token}")
+    private String exchangeTwoApiKey;
 
     @Autowired
     private OrderService orderService;
