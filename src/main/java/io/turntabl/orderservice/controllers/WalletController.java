@@ -35,5 +35,6 @@ public class WalletController {
     @ResponseStatus(code = HttpStatus.OK)
     public List<WalletDto> getAllWallets(@AuthenticationPrincipal Jwt principal){
         return walletService.getAllWallets();
+
     }
 }
