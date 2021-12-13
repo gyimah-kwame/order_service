@@ -71,7 +71,7 @@ public class RedisCreateOrderReceiver {
 
 
     /**
-     * Processes Incoming Message Converted to Object from MTN
+     * Processes Incoming Message Converted
      * @param message
      */
     public void createOrderMessageConsumer(String message){
@@ -139,16 +139,15 @@ public class RedisCreateOrderReceiver {
                 MarketDataDto marketDataDtoOne = redisService.getMarketDataFromHash(receivedOrder.getTicker(), exchangeOne.getId());
                 MarketDataDto marketDataDtoTwo = redisService.getMarketDataFromHash(receivedOrder.getTicker(), exchangeTwo.getId());
 
+                // received order's price is not less than the market bid price
                 if (
-                        (receivedOrder.getPrice() < (marketDataDtoOne.getLastTradedPrice() - marketDataDtoOne.getMaxPriceShift())) &&
-                                (receivedOrder.getPrice() < (marketDataDtoTwo.getLastTradedPrice() - marketDataDtoTwo.getMaxPriceShift()))
+                        (receivedOrder.getPrice() < marketDataDtoOne.getBidPrice()) && (receivedOrder.getPrice() < marketDataDtoTwo.getBidPrice())
                 ) {
                     receivedOrder.setStatus(OrderStatus.INVALID);
                     receivedOrder.setStatusInfo("order price too low for market");
 
                     return orderRepository.save(receivedOrder);
                 }
-
 
                 List<? extends Ticker> availableFinancialProductsOnMarket = findAppropriateTickerInformationFromOrderForBuyOperation(receivedOrder, exchangeOne,exchangeTwo);
 
@@ -210,12 +209,20 @@ public class RedisCreateOrderReceiver {
 
                         }
                     }else {
+                        if (receivedOrder.getQuantity() > quantitySent ){
+                            // Perform Personal Calculations and Send to exchange
+                            receivedOrder = processFinancialProducts(receivedOrder, exchangeOne, exchangeTwo, marketDataDtoOne, marketDataDtoTwo, quantitySent);
+                            quantitySent += (receivedOrder.getQuantity() - quantitySent) ;
+                        }
                         receivedOrder.setStatus(OrderStatus.OPEN);
                         receivedOrder.setStatusInfo("Order processed");
                         receivedOrder = orderRepository.save(receivedOrder);
                     }
                 }
 
+                if (availableFinancialProductsOnMarket.isEmpty()){
+                    receivedOrder = processFinancialProducts(receivedOrder, exchangeOne, exchangeTwo, marketDataDtoOne, marketDataDtoTwo, quantitySent);
+                }
             }else{
 
                 throw new InsufficientWalletBalanceException("Wallet balance is insufficient for the order");
@@ -230,11 +237,29 @@ public class RedisCreateOrderReceiver {
         return  receivedOrder;
     }
 
+    private Order processFinancialProducts(Order receivedOrder, ExchangeDto exchangeOne, ExchangeDto exchangeTwo, MarketDataDto marketDataDtoOne, MarketDataDto marketDataDtoTwo, int quantitySent) {
+        MarketDataDto marketDataDto = marketDataDtoOne.getBidPrice() < marketDataDtoTwo.getBidPrice() ? marketDataDtoOne : marketDataDtoTwo;
+        double price = marketDataDto.getBidPrice() - (0.09 *  marketDataDto.getBidPrice());
+        ExchangeDto exchange = marketDataDto.getExchangeId().equals(exchangeOne.getId()) ? exchangeOne : exchangeTwo;
+        String orderIdReturnedFromExchange = sendOrderToExchange(
+                receivedOrder,
+                price,
+                exchange,
+                receivedOrder.getQuantity() - quantitySent
+        );
+
+        receivedOrder.getOrderInformation()
+                .add(new OrderInformationDto(exchange.getBaseUrl(), orderIdReturnedFromExchange, (receivedOrder.getQuantity() - quantitySent), 0, OrderItemStatus.PENDING, price));
+        receivedOrder = orderRepository.save(receivedOrder);
+        return receivedOrder;
+    }
+
+
+
     @Transactional
     Order sellOperation(Order receivedOrder,Wallet wallet, ExchangeDto exchangeOne, ExchangeDto exchangeTwo) {
 
-        /* 0. TODO: Verify Daily Buy Limit is not up. (We have a SELL limit for each product)
-         * 1. Verify User owns the quantity of stock to be sold (Quantity to SELL )
+        /* 1. Verify User owns the quantity of stock to be sold (Quantity to SELL )
          * 2. SELL-executions should be in order by the GREATEST price in the market
          * 3. Executions to exchange should be bound to single order
          * NB: Keep track of execution price and order
@@ -253,6 +278,10 @@ public class RedisCreateOrderReceiver {
                     .orElseThrow(() ->
                             new InvalidOrderException("Invalid Sell Operation. Insufficient Quantity of " + finalReceivedOrder.getTicker() + " in account")
                     );
+
+            MarketDataDto marketDataDtoOne = redisService.getMarketDataFromHash(receivedOrder.getTicker(), exchangeOne.getId());
+            MarketDataDto marketDataDtoTwo = redisService.getMarketDataFromHash(receivedOrder.getTicker(), exchangeTwo.getId());
+
 
             List<? extends Ticker> availableFinancialProductsOnMarket = findAppropriateTickerInformationFromOrderForSellOperation(receivedOrder, exchangeOne, exchangeTwo);
             /*
