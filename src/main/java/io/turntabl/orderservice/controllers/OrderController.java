@@ -25,7 +25,7 @@ public class OrderController {
     @PostMapping("/orders")
     @ResponseStatus(code = HttpStatus.CREATED)
     public OrderDto createOrder(@Valid @RequestBody OrderRequest orderRequest, @AuthenticationPrincipal Jwt principal) {
-        return orderService.createOrder(principal.getSubject(), orderRequest);
+        return orderService.createOrder(principal.getSubject(), OrderDto.fromRequest(orderRequest));
     }
 
     @GetMapping("/orders")
@@ -40,7 +40,7 @@ public class OrderController {
 
     @PutMapping("/orders/{id}")
     public OrderDto updateOrder(@PathVariable String id, @RequestBody OrderRequest orderRequest, @AuthenticationPrincipal Jwt principal) {
-        return orderService.updateOrder(id, principal.getSubject(), orderRequest);
+        return orderService.updateOrder(id, principal.getSubject(), OrderDto.fromRequest(orderRequest));
     }
 
     @DeleteMapping("/orders/{id}")

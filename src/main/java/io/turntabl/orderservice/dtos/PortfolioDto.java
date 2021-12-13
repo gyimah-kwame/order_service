@@ -10,6 +10,5 @@ import lombok.NoArgsConstructor;
 public class PortfolioDto {
 
     private String ticker;
-
     private int quantity;
 }
