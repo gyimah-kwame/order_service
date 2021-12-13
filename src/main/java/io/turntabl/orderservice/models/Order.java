@@ -16,10 +16,10 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-@Document("orders")
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
+@Document("orders")
 public class Order {
 
     @Id
@@ -49,18 +49,14 @@ public class Order {
     @Field(name = "updated_at")
     private LocalDateTime updatedAt = LocalDateTime.now();
 
+
     public static Order fromDto(OrderDto dto){
+
         Order order = new Order();
-
-        order.setSide(dto.getSide());
-        order.setOrderInformation(dto.getOrderInformation());
-        order.setPrice(dto.getPrice());
-        order.setQuantity(dto.getQuantity());
-        order.setTicker(dto.getTicker());
-        order.setId(dto.getId());
-        order.setUserId(dto.getUserId());
-        order.setStatus(dto.getStatus());
-
+        order.side = dto.getSide();
+        order.price = dto.getPrice();
+        order.quantity = dto.getQuantity();
+        order.ticker = dto.getTicker();
 
         return order;
     }

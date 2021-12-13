@@ -51,11 +51,13 @@ public class OrderServiceImpl implements OrderService {
     public OrderDto createOrder(String userId, OrderDto requestDTO) {
 
         Order order = Order.fromDto(requestDTO);
+        order.setUserId(userId);
         order.setStatus(OrderStatus.PENDING);
+
         OrderDto responseDTO = OrderDto.fromEntity(orderRepository.save(order));
 
         // Ensuring Order is pesisted before publishing to topic for validation
-        stringRedisTemplate.convertAndSend(createOrderTopic.getTopic(), responseDTO.getId());
+//        stringRedisTemplate.convertAndSend(createOrderTopic.getTopic(), responseDTO.getId());
 
         return responseDTO;
     }

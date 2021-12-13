@@ -41,25 +41,27 @@ public class OrderDto {
 
     public static OrderDto fromRequest(OrderRequest orderRequest) {
         OrderDto orderDto = new OrderDto();
-        orderDto.setSide(Side.valueOf(orderRequest.getSide().toUpperCase()));
-        orderDto.setPrice(orderRequest.getPrice());
-        orderDto.setQuantity(orderRequest.getQuantity());
-        orderDto.setTicker(orderRequest.getTicker());
+        orderDto.side = Side.valueOf(orderRequest.getSide().toUpperCase());
+        orderDto.price = orderRequest.getPrice();
+        orderDto.quantity = orderRequest.getQuantity();
+        orderDto.ticker = orderRequest.getTicker();
+
         return orderDto;
     }
 
     public static OrderDto fromEntity(Order order){
+
         OrderDto orderDto = new OrderDto();
-        orderDto.setId(order.getId());
-        orderDto.setOrderInformation(order.getOrderInformation());
-        orderDto.setQuantity(order.getQuantity());
-        orderDto.setPrice(order.getPrice());
-        orderDto.setTicker(order.getTicker());
-        orderDto.setPrice(order.getPrice());
-        orderDto.setCreatedAt(order.getCreatedAt());
-        orderDto.setStatus(order.getStatus());
-        orderDto.setSide(order.getSide());
-        orderDto.setUserId(order.getUserId());
+
+        orderDto.id = order.getId();
+        orderDto.orderInformation = order.getOrderInformation();
+        orderDto.quantity = order.getQuantity();
+        orderDto.price = order.getPrice();
+        orderDto.ticker = order.getTicker();
+        orderDto.createdAt = order.getCreatedAt();
+        orderDto.status = order.getStatus();
+        orderDto.side = order.getSide();
+        orderDto.userId = order.getUserId();
 
         return orderDto;
     }

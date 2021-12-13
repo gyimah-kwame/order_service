@@ -46,7 +46,7 @@ class WalletServiceImplTest {
 
     }
     @Test
-    @DisplayName("Test Create Wallet for new User")
+    @DisplayName("Test Create Wallet for new User if wallet does not exist")
     void createWalletWhenUserIsNew() {
 
         Mockito.when(walletRepository.save(ArgumentMatchers.any()))
