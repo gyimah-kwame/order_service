@@ -126,15 +126,9 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public List<OrderDto> findTotalOrders(){
         return orderRepository.findAll()
-                .stream().map(OrderDto::fromModel)
+                .stream().map(OrderDto::fromEntity)
                 .collect(Collectors.toList());
     }
-
-    @Override
-    public void updateOrderStatus(String orderId, String orderItemId, OrderItemStatus status, int quantityFulfilled) {
-        Optional<Order> order = orderRepository.findById(orderId);
-
-
 
     // TODO: Refactor this block
     @Override
