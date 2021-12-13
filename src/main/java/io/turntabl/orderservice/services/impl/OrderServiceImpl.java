@@ -174,7 +174,7 @@ public class OrderServiceImpl implements OrderService {
 
         if (fulfilledItems == order.getOrderInformation().size()) {
 
-            order.setStatus(OrderStatus.FULFILLED);
+            order.setStatus(OrderStatus.CLOSED);
 
             /*
                 update portfolio

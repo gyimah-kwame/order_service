@@ -1,6 +1,10 @@
 package io.turntabl.orderservice.enums;
 
 public enum OrderItemStatus {
-
-    PENDING, FULFILLED
+    PENDING,
+    PROCESSING,
+    PROCESSED,
+    PARTIALLY_FULFILLED,
+    FULFILLED,
+    INVALID
 }

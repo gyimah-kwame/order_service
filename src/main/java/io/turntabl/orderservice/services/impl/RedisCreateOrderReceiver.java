@@ -145,9 +145,10 @@ public class RedisCreateOrderReceiver {
 
                     // 2. TODO: Verify Quantities are publishable to exchange
 
+
                     if (quantitySent < receivedOrder.getQuantity() )   {
 
-                        receivedOrder.setStatus(OrderStatus.PROCESSING);
+                        receivedOrder.setStatus(OrderStatus.OPEN);
                         receivedOrder.setStatusInfo("Order partially Processed");
                         receivedOrder = orderRepository.save(receivedOrder);
 
@@ -188,7 +189,7 @@ public class RedisCreateOrderReceiver {
 
                         }
                     }else {
-                        receivedOrder.setStatus(OrderStatus.PROCESSED);
+                        receivedOrder.setStatus(OrderStatus.OPEN);
                         receivedOrder.setStatusInfo("Order processed");
                         receivedOrder = orderRepository.save(receivedOrder);
                     }
@@ -251,9 +252,9 @@ public class RedisCreateOrderReceiver {
 
                 int quantitySent = 0;
                 ExchangeDto exchange = exchangeOne.getBaseUrl().equalsIgnoreCase(marketProductForSale.getExchangeURL()) ? exchangeOne : exchangeTwo;
-
+                receivedOrder.setStatus(OrderStatus.OPEN);
                 if (quantitySent < receivedOrder.getQuantity() )   {
-                    receivedOrder.setStatus(OrderStatus.PROCESSING);
+
                     receivedOrder.setStatusInfo("Order partially Processed");
                     receivedOrder = orderRepository.save(receivedOrder);
 
@@ -277,7 +278,6 @@ public class RedisCreateOrderReceiver {
                                         idReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING));
                     }
                 }else {
-                    receivedOrder.setStatus(OrderStatus.PROCESSED);
                     receivedOrder.setStatusInfo("Order processed");
                     receivedOrder = orderRepository.save(receivedOrder);
                 }
