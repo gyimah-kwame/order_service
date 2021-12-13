@@ -77,4 +77,6 @@ public interface OrderService {
 
 //    OrderDto findById(String orderId);
 
+    List<OrderDto> findTotalOrders();
+
 }
