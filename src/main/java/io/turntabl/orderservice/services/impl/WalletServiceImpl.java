@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @AllArgsConstructor
@@ -34,5 +35,11 @@ public class WalletServiceImpl implements WalletService {
         Optional<Wallet> userWallet = walletRepository.findById(userId);
         Wallet wallet = userWallet.orElseThrow(() -> new WalletNotFoundException("User's wallet does not exist",userId));
         return wallet.getPortfolios();
+    }
+
+    @Override
+    public List<WalletDto> getAllWallets() {
+        return walletRepository.findAll().stream()
+                .map(WalletDto::fromModel).collect(Collectors.toList());
     }
 }

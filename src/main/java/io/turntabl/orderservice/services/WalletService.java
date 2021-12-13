@@ -12,4 +12,6 @@ public interface WalletService {
     WalletDto createWallet(String userId);
 
     List<PortfolioDto> getUserPortfolios(String userId);
+
+    List<WalletDto> getAllWallets();
 }

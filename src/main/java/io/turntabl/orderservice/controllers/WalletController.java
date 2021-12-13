@@ -9,6 +9,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/")
 @CrossOrigin
@@ -23,5 +25,12 @@ public class WalletController {
     public WalletDto createWallet(@AuthenticationPrincipal Jwt principal) {
         log.info("Getting Information for {}",principal.getSubject());
         return walletService.createWallet(principal.getSubject()) ;
+    }
+
+    @GetMapping("/wallet/all")
+    @ResponseStatus(code = HttpStatus.OK)
+    public List<WalletDto> getAllWallets(@AuthenticationPrincipal Jwt principal){
+        return walletService.getAllWallets();
+
     }
 }
