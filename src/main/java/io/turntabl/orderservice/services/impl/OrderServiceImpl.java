@@ -13,8 +13,10 @@ import io.turntabl.orderservice.repositories.OrderRepository;
 import io.turntabl.orderservice.repositories.WalletRepository;
 import io.turntabl.orderservice.requests.OrderRequest;
 import io.turntabl.orderservice.services.OrderService;
+import io.turntabl.orderservice.services.RedisService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.stereotype.Service;
@@ -36,9 +38,8 @@ import java.util.stream.Collectors;
 public class OrderServiceImpl implements OrderService {
 
     private final OrderRepository orderRepository;
-    private final StringRedisTemplate stringRedisTemplate;
-    private final ChannelTopic createOrderTopic;
     private final WalletRepository walletRepository;
+    private final RedisService redisService;
 
 
     /**
@@ -56,8 +57,8 @@ public class OrderServiceImpl implements OrderService {
 
         OrderDto responseDTO = OrderDto.fromEntity(orderRepository.save(order));
 
-        // Ensuring Order is pesisted before publishing to topic for validation
-//        stringRedisTemplate.convertAndSend(createOrderTopic.getTopic(), responseDTO.getId());
+        // Ensuring Order is persisted before publishing to topic for validation
+        redisService.convertAndSendToCreateOrderTopic(responseDTO.getId());
 
         return responseDTO;
     }
@@ -81,7 +82,7 @@ public class OrderServiceImpl implements OrderService {
         order = orderRepository.save(order);
 
         //todo: Send order updated event
-//        stringRedisTemplate.convertAndSend(updateTopic.getTopic(), order.getId());
+        redisService.convertAndSendToUpdateOrderTopic(order.getId());
 
         return OrderDto.fromEntity(order);
     }
