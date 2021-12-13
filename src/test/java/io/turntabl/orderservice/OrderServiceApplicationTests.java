@@ -9,9 +9,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @SpringBootTest
 class OrderServiceApplicationTests {
 
-	@Test
-	void contextLoads() {
-		assertTrue(true);
-	}
+//	@Test
+//	void contextLoads() {
+//		assertTrue(true);
+//	}
 
 }

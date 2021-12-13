@@ -7,15 +7,15 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class CreateOrderListenerImplTest {
 
-    @Test
-    void onMessage() {
-    }
-
-    @Test
-    void buyOperation() {
-    }
-
-    @Test
-    void sellOperation() {
-    }
+//    @Test
+//    void onMessage() {
+//    }
+//
+//    @Test
+//    void buyOperation() {
+//    }
+//
+//    @Test
+//    void sellOperation() {
+//    }
 }
