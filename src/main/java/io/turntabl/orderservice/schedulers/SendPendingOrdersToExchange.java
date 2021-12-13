@@ -1,6 +1,6 @@
 package io.turntabl.orderservice.schedulers;
 
-import io.turntabl.orderservice.constants.OrderStatus;
+import io.turntabl.orderservice.enums.OrderStatus;
 import io.turntabl.orderservice.dtos.OrderDto;
 import io.turntabl.orderservice.services.OrderService;
 import lombok.extern.slf4j.Slf4j;
@@ -9,7 +9,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -22,8 +21,10 @@ public class SendPendingOrdersToExchange {
     @Autowired
     private WebClient webClient;
 
-    @Value("${matraining.token}")
-    private String apiKey;
+    @Value("${matraining.exchange.one.token}")
+    private String exchangeOneApiKey;
+    @Value("${matraining.exchange.two.token}")
+    private String exchangeTwoApiKey;
 
     @Autowired
     private OrderService orderService;
@@ -31,7 +32,7 @@ public class SendPendingOrdersToExchange {
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
 
-    @Qualifier("createTopic")
+    @Qualifier("createOrderTopic")
     @Autowired
     private ChannelTopic topic;
 

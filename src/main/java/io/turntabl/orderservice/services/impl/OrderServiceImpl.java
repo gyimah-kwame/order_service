@@ -1,9 +1,8 @@
 package io.turntabl.orderservice.services.impl;
 
-import com.google.gson.Gson;
-import io.turntabl.orderservice.constants.OrderItemStatus;
-import io.turntabl.orderservice.constants.OrderStatus;
-import io.turntabl.orderservice.constants.Side;
+import io.turntabl.orderservice.enums.OrderItemStatus;
+import io.turntabl.orderservice.enums.OrderStatus;
+import io.turntabl.orderservice.enums.Side;
 import io.turntabl.orderservice.dtos.OrderDto;
 import io.turntabl.orderservice.dtos.OrderInformationDto;
 import io.turntabl.orderservice.dtos.PortfolioDto;
@@ -16,9 +15,6 @@ import io.turntabl.orderservice.requests.OrderRequest;
 import io.turntabl.orderservice.services.OrderService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.stereotype.Service;
@@ -28,110 +24,128 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+
+/**
+ * This is the order service default implementation
+ * It defines the definition of all behaviours in relation to Order Creation
+ */
 @Service
 @Transactional
 @Slf4j
+@AllArgsConstructor // This allows for auto wiring through constructor for dependencies.
 public class OrderServiceImpl implements OrderService {
 
-    @Autowired
-    private OrderRepository orderRepository;
-
-    @Autowired
-    private StringRedisTemplate stringRedisTemplate;
-
-    @Qualifier("createTopic")
-    @Autowired
-    private ChannelTopic topic;
-
-    @Qualifier("updateTopic")
-    @Autowired
-    private ChannelTopic updateTopic;
-
-    @Autowired
-    private WalletRepository walletRepository;
+    private final OrderRepository orderRepository;
+    private final StringRedisTemplate stringRedisTemplate;
+    private final ChannelTopic createOrderTopic;
+    private final WalletRepository walletRepository;
 
 
+    /**
+     * This method Creates an order based on the client's subject ID
+     * @param userId refers to the Subject ID from the OAUTH server
+     * @param requestDTO refers to the order request placed by the client
+     * @return an Order DTO
+     */
     @Override
-    public OrderDto createOrder(String userId, OrderRequest orderRequest) {
-        Order order = new Order();
+    public OrderDto createOrder(String userId, OrderDto requestDTO) {
+
+        Order order = Order.fromDto(requestDTO);
         order.setUserId(userId);
-        order.setSide(Side.valueOf(orderRequest.getSide().toUpperCase()));
-        order.setQuantity(orderRequest.getQuantity());
-        order.setTicker(orderRequest.getTicker());
-        order.setPrice(orderRequest.getPrice());
         order.setStatus(OrderStatus.PENDING);
 
-        OrderDto orderDto = OrderDto.fromModel(orderRepository.save(order));
+        OrderDto responseDTO = OrderDto.fromEntity(orderRepository.save(order));
 
-//        stringRedisTemplate.convertAndSend(topic.getTopic(), orderDto.getId());
+        // Ensuring Order is pesisted before publishing to topic for validation
+//        stringRedisTemplate.convertAndSend(createOrderTopic.getTopic(), responseDTO.getId());
 
-        return orderDto;
+        return responseDTO;
     }
 
-    @Override
-    public OrderDto updateOrder(String id, String userId, OrderRequest orderRequest) {
-        Order order = orderRepository.findByIdAndUserId(id, userId).orElseThrow(() ->
-                new OrderNotFoundException(String.format("order with id %s does not exists", id)));
 
-        order.setPrice(orderRequest.getPrice());
-        order.setQuantity(orderRequest.getQuantity());
+    /**
+     * @param existingOrderId refers tp tje existing order Id
+     * @param userId          the user id
+     * @param requestDTO refers to the incoming request dto
+     * @return orderDTO
+     */
+    @Override
+    public OrderDto updateOrder(String existingOrderId, String userId, OrderDto requestDTO) {
+
+        Order order = orderRepository.findByIdAndUserId(existingOrderId, userId).orElseThrow(() ->
+                new OrderNotFoundException(String.format("order with id %s does not exists", existingOrderId)));
+
+        order.setPrice(requestDTO.getPrice());
+        order.setQuantity(requestDTO.getQuantity());
 
         order = orderRepository.save(order);
 
+        //todo: Send order updated event
 //        stringRedisTemplate.convertAndSend(updateTopic.getTopic(), order.getId());
 
-        return OrderDto.fromModel(order);
+        return OrderDto.fromEntity(order);
     }
 
+    /**
+     * @param status the status
+     * @return
+     */
     @Override
     public List<OrderDto> findOrdersByStatus(String status) {
-        return orderRepository.findByStatus(status).stream().map(OrderDto::fromModel).collect(Collectors.toList());
+        return orderRepository.findByStatus(status)
+                .stream()
+                .map(OrderDto::fromEntity)
+                .collect(Collectors.toList());
     }
 
     @Override
     public List<OrderDto> getUserOrdersByStatus(String userId, String status) {
-        return orderRepository.findByUserIdAndStatus(userId, status.toUpperCase()).stream().map(OrderDto::fromModel).collect(Collectors.toList());
+        return orderRepository.findByUserIdAndStatus(userId, status.toUpperCase())
+                .stream()
+                .map(OrderDto::fromEntity)
+                .collect(Collectors.toList());
     }
 
     @Override
-    public void deleteOrder(String id, String userId) {
-        Order order = orderRepository.findByIdAndUserId(id, userId)
-                .orElseThrow(() -> new OrderNotFoundException(String.format("order with id %s does not exists", id)));
+    public void deleteOrder(String orderID, String userId) {
+        Order order = orderRepository.findByIdAndUserId(orderID, userId)
+                .orElseThrow(() -> new OrderNotFoundException(String.format("order with id %s does not exists", orderID)));
 
         orderRepository.delete(order);
     }
 
     @Override
     public List<OrderDto> getAllOrders(String userId) {
-        return orderRepository.findByUserId(userId).stream()
-                .map(OrderDto::fromModel)
+        return orderRepository.findByUserId(userId)
+                .stream()
+                .map(OrderDto::fromEntity)
                 .collect(Collectors.toList());
     }
+
 
     @Override
     public List<OrderDto> findTotalOrders(){
         return orderRepository.findAll()
-                .stream().map(OrderDto::fromModel)
+                .stream().map(OrderDto::fromEntity)
                 .collect(Collectors.toList());
     }
 
+    // TODO: Refactor this block
     @Override
     public void updateOrderStatus(String orderId, String orderItemId, OrderItemStatus status, int quantityFulfilled) {
-        Optional<Order> order = orderRepository.findById(orderId);
-
-        if (order.isEmpty()) return;
-
-        Order actualOrder = order.get();
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(String.format("order with id %s does not exists", orderId)));
 
         /*
             find order item id
          */
-        OrderInformationDto orderItem = actualOrder.getOrderInformation()
+        OrderInformationDto orderItem = order.getOrderInformation()
                 .stream().filter(item -> item.getOrderId().equals(orderItemId))
                 .findFirst()
                 .orElse(new OrderInformationDto());
 
-        log.info("item {}", orderItem);
+        log.info("Updating Order Item {}", orderItem);
+
 
         orderItem.setOrderId(orderId);
         orderItem.setStatus(status);
@@ -140,43 +154,44 @@ public class OrderServiceImpl implements OrderService {
         /*
             find the other order items excluding the one we are updating
          */
-        List<OrderInformationDto> items = actualOrder.getOrderInformation()
+        List<OrderInformationDto> items = order.getOrderInformation()
                 .stream()
-                .filter(x -> !x.getOrderId().equals(orderItem.getOrderId()))
+                .filter(orderInfo -> !orderInfo.getOrderId().equals(orderItem.getOrderId()))
                 .collect(Collectors.toList());
 
         // add the updated order item to the list
         items.add(orderItem);
 
-        actualOrder.setOrderInformation(items);
+        // Update Order
+        order.setOrderInformation(items);
 
 
-        long fulfilledItems = actualOrder
+        long fulfilledItems = order
                 .getOrderInformation()
                 .stream().filter(x -> x.getStatus() == OrderItemStatus.FULFILLED)
                 .count();
 
-        if (fulfilledItems == actualOrder.getOrderInformation().size()) {
+        if (fulfilledItems == order.getOrderInformation().size()) {
 
-            actualOrder.setStatus(OrderStatus.FULFILLED);
+            order.setStatus(OrderStatus.FULFILLED);
 
             /*
                 update portfolio
              */
-            Wallet wallet = walletRepository.findByUserId(actualOrder.getUserId()).orElse(new Wallet());
+            Wallet wallet = walletRepository.findById(order.getUserId()).orElse(new Wallet());
 
 
             PortfolioDto portfolio = wallet
                     .getPortfolios()
                     .stream()
-                    .filter(x -> x.getTicker().equals(actualOrder.getTicker()))
+                    .filter(x -> x.getTicker().equals(order.getTicker()))
                     .findFirst()
                     .orElse(new PortfolioDto());
 
-            portfolio.setTicker(actualOrder.getTicker());
+            portfolio.setTicker(order.getTicker());
 
-            int quantity = actualOrder.getSide() == Side.SELL ? portfolio.getQuantity() - actualOrder.getQuantity()
-                    : portfolio.getQuantity() + actualOrder.getQuantity();
+            int quantity = order.getSide() == Side.SELL ? portfolio.getQuantity() - order.getQuantity()
+                    : portfolio.getQuantity() + order.getQuantity();
 
             portfolio.setQuantity(quantity);
 
@@ -192,10 +207,9 @@ public class OrderServiceImpl implements OrderService {
 
             walletRepository.save(wallet);
 
-
         }
 
-        orderRepository.save(actualOrder);
+        orderRepository.save(order);
 
 
     }

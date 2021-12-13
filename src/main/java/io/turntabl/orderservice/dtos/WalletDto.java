@@ -19,6 +19,7 @@ public class WalletDto {
     private List<PortfolioDto> portfolios;
 
     public static WalletDto fromModel(Wallet wallet) {
+
         WalletDto walletDto = new WalletDto();
         walletDto.setBalance(wallet.getBalance());
         walletDto.setUserId(wallet.getUserId());

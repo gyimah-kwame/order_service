@@ -14,12 +14,12 @@ public class MalonOrderRequest {
 
     private String side;
 
-    public static MalonOrderRequest fromOrder(Order order) {
+    public static MalonOrderRequest fromOrder(Order order, double price, int quantity) {
         MalonOrderRequest malonOrderRequest = new MalonOrderRequest();
-        malonOrderRequest.price = order.getPrice();
+        malonOrderRequest.price = price;
         malonOrderRequest.product = order.getTicker();
         malonOrderRequest.side = order.getSide().toString();
-        malonOrderRequest.quantity = order.getQuantity();
+        malonOrderRequest.quantity = quantity;
 
         return malonOrderRequest;
     }

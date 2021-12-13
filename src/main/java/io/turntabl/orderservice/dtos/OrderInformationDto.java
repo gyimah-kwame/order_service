@@ -1,7 +1,6 @@
 package io.turntabl.orderservice.dtos;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import io.turntabl.orderservice.constants.OrderItemStatus;
+import io.turntabl.orderservice.enums.OrderItemStatus;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
