@@ -13,8 +13,10 @@ import io.turntabl.orderservice.repositories.OrderRepository;
 import io.turntabl.orderservice.repositories.WalletRepository;
 import io.turntabl.orderservice.requests.OrderRequest;
 import io.turntabl.orderservice.services.OrderService;
+import io.turntabl.orderservice.services.RedisService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.stereotype.Service;
@@ -36,9 +38,8 @@ import java.util.stream.Collectors;
 public class OrderServiceImpl implements OrderService {
 
     private final OrderRepository orderRepository;
-    private final StringRedisTemplate stringRedisTemplate;
-    private final ChannelTopic createOrderTopic;
     private final WalletRepository walletRepository;
+    private final RedisService redisService;
 
 
     /**
@@ -56,8 +57,8 @@ public class OrderServiceImpl implements OrderService {
 
         OrderDto responseDTO = OrderDto.fromEntity(orderRepository.save(order));
 
-        // Ensuring Order is pesisted before publishing to topic for validation
-//        stringRedisTemplate.convertAndSend(createOrderTopic.getTopic(), responseDTO.getId());
+        // Ensuring Order is persisted before publishing to topic for validation
+        redisService.convertAndSendToCreateOrderTopic(responseDTO.getId());
 
         return responseDTO;
     }
@@ -81,7 +82,7 @@ public class OrderServiceImpl implements OrderService {
         order = orderRepository.save(order);
 
         //todo: Send order updated event
-//        stringRedisTemplate.convertAndSend(updateTopic.getTopic(), order.getId());
+        redisService.convertAndSendToUpdateOrderTopic(order.getId());
 
         return OrderDto.fromEntity(order);
     }
@@ -137,7 +138,7 @@ public class OrderServiceImpl implements OrderService {
                 .orElseThrow(() -> new OrderNotFoundException(String.format("order with id %s does not exists", orderId)));
 
         /*
-            find order item id
+            find order item
          */
         OrderInformationDto orderItem = order.getOrderInformation()
                 .stream().filter(item -> item.getOrderId().equals(orderItemId))
@@ -147,7 +148,7 @@ public class OrderServiceImpl implements OrderService {
         log.info("Updating Order Item {}", orderItem);
 
 
-        orderItem.setOrderId(orderId);
+        orderItem.setOrderId(orderItemId);
         orderItem.setStatus(status);
         orderItem.setQuantityFulfilled(quantityFulfilled == -1 ? orderItem.getQuantity() : quantityFulfilled);
 
@@ -169,11 +170,12 @@ public class OrderServiceImpl implements OrderService {
         long fulfilledItems = order
                 .getOrderInformation()
                 .stream().filter(x -> x.getStatus() == OrderItemStatus.FULFILLED)
-                .count();
+                .mapToInt(OrderInformationDto::getQuantityFulfilled)
+                .sum();
 
-        if (fulfilledItems == order.getOrderInformation().size()) {
+        if (fulfilledItems == order.getQuantity()) {
 
-            order.setStatus(OrderStatus.FULFILLED);
+            order.setStatus(OrderStatus.CLOSED);
 
             /*
                 update portfolio
@@ -190,8 +192,8 @@ public class OrderServiceImpl implements OrderService {
 
             portfolio.setTicker(order.getTicker());
 
-            int quantity = order.getSide() == Side.SELL ? portfolio.getQuantity() - order.getQuantity()
-                    : portfolio.getQuantity() + order.getQuantity();
+            int quantity = order.getSide() == Side.SELL ? portfolio.getQuantity() - orderItem.getQuantity()
+                    : portfolio.getQuantity() + orderItem.getQuantity();
 
             portfolio.setQuantity(quantity);
 

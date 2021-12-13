@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -38,18 +39,27 @@ public class CheckOrderStatusScheduler {
     @Autowired
     private OrderRepository orderRepository;
 
-//    @Scheduled(cron = "*/2 * * * * *")
+    @Scheduled(cron = "*/2 * * * * *")
     public void checkOrderStatus() {
 
-        List<Order> orders = orderRepository.findByStatus(OrderStatus.PROCESSING.toString());
+        List<Order> orders = orderRepository.findByStatus(OrderStatus.OPEN.toString());
 
         if (orders.size() == 0) return;
 
         for( Order order : orders) {
 
-            order.getOrderInformation().forEach(item -> {
+            order.getOrderInformation()
+                    .stream()
+                    .filter(orderItem -> !orderItem.getStatus().equals(OrderItemStatus.FULFILLED))
+                    .forEach(item -> {
                 webClient.get()
-                        .uri(String.format("%s/%s/order/%s", item.getExchangeUrl(), exchangeOneApiKey, item.getOrderId()))
+                        .uri(
+                                String.format("%s/%s/order/%s",
+                                        item.getExchangeUrl(),
+                                        item.getExchangeUrl().equalsIgnoreCase("https://exchange.matraining.com") ? exchangeOneApiKey: exchangeTwoApiKey,
+                                        item.getOrderId()
+                                )
+                        )
                         .retrieve()
                         .onStatus(HttpStatus::is5xxServerError, response -> response.bodyToMono(OrderStatusResponse.class)
                                 .flatMap(error -> {
@@ -57,6 +67,7 @@ public class CheckOrderStatusScheduler {
                                     return Mono.error(new OrderStatusException(error.getMessage(), order.getId(), item.getOrderId()));
                                 }))
                         .bodyToMono(MalonOrderStatusResponse.class)
+                        .doOnError(throwable -> log.error(throwable.getMessage()))
                         .subscribe(x -> log.info("success"));
 
             });

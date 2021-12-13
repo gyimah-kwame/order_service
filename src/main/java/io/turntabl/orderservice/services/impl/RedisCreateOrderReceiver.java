@@ -1,11 +1,14 @@
 package io.turntabl.orderservice.services.impl;
 
 import com.google.gson.Gson;
+import io.turntabl.orderservice.dtos.ExchangeDto;
+import io.turntabl.orderservice.dtos.MarketDataDto;
+import io.turntabl.orderservice.dtos.OrderInformationDto;
+import io.turntabl.orderservice.dtos.PortfolioDto;
 import io.turntabl.orderservice.enums.ExchangeName;
 import io.turntabl.orderservice.enums.OrderItemStatus;
 import io.turntabl.orderservice.enums.OrderStatus;
 import io.turntabl.orderservice.enums.Side;
-import io.turntabl.orderservice.dtos.*;
 import io.turntabl.orderservice.exceptions.InsufficientWalletBalanceException;
 import io.turntabl.orderservice.exceptions.InvalidOrderException;
 import io.turntabl.orderservice.exceptions.OrderNotFoundException;
@@ -17,13 +20,10 @@ import io.turntabl.orderservice.repositories.OrderRepository;
 import io.turntabl.orderservice.repositories.WalletRepository;
 import io.turntabl.orderservice.repositories.tickers.*;
 import io.turntabl.orderservice.requests.MalonOrderRequest;
+import io.turntabl.orderservice.services.RedisService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.connection.Message;
-import org.springframework.data.redis.connection.MessageListener;
-import org.springframework.data.redis.core.HashOperations;
-import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -31,19 +31,13 @@ import reactor.core.publisher.Mono;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * The type Create order listener.
- */
-@Service
 @Slf4j
-public class CreateOrderListenerImpl implements MessageListener {
+public class RedisCreateOrderReceiver {
 
     @Autowired
     private OrderRepository orderRepository;
     @Autowired
-    private Gson gson;
-    @Autowired
-    private HashOperations<String, String, String> hashOperations;
+    private RedisService redisService;
     @Autowired
     private WalletRepository walletRepository;
     @Autowired
@@ -72,20 +66,21 @@ public class CreateOrderListenerImpl implements MessageListener {
     private String exchangeTwoApiKey;
 
 
+    @Autowired
+    private Gson gson;
+
+
     /**
-     * This listener listens for new orders and begins the validation process
-     * @param message refers to incoming message from Order Created Event
-     * @param pattern
+     * Processes Incoming Message Converted to Object from MTN
+     * @param message
      */
-    @Override
-    public void onMessage(Message message, byte[] pattern) {
+    public void createOrderMessageConsumer(String message){
 
-        log.info("New Order to be processed {}", message.toString());
-
+        log.info("New Order to be processed {}", message);
         /*
          *  1. Verify Order Exists in Database and Delegate based on SIDE
          */
-        Order order = orderRepository.findById(message.toString()).
+        Order order = orderRepository.findById(message).
                 orElseThrow(() -> new OrderNotFoundException("Order with ID " + message + " tobe validated and processed does not exist."));
 
         try {
@@ -93,6 +88,7 @@ public class CreateOrderListenerImpl implements MessageListener {
             Order finalOrder = order;
             Wallet wallet = walletRepository.findById(order.getUserId())
                     .orElseThrow(() -> new WalletNotFoundException("Wallet information for " + finalOrder.getUserId() + " not found", finalOrder.getId()));
+            log.info("Wallet for user successfully obtained : {}", wallet);
 
             ExchangeDto exchangeOneDetails = getExchangeDetailsFromHash(ExchangeName.EXCHANGE_ONE);
             ExchangeDto exchangeTwoDetails = getExchangeDetailsFromHash(ExchangeName.EXCHANGE_TWO);
@@ -100,9 +96,11 @@ public class CreateOrderListenerImpl implements MessageListener {
             if (exchangeOneDetails.isActive() || exchangeTwoDetails.isActive()) {
                 switch (order.getSide()) {
                     case BUY:
+                        log.info("Buy Operation being placed, for order {}", order);
                         order = buyOperation(order, wallet, exchangeOneDetails, exchangeTwoDetails);
                         break;
                     case SELL:
+                        log.info("Sell Operation being placed, for order {}", order);
                         order = sellOperation(order, wallet, exchangeOneDetails, exchangeTwoDetails);
                         break;
                 }
@@ -113,24 +111,19 @@ public class CreateOrderListenerImpl implements MessageListener {
                 order.setStatus(OrderStatus.PENDING);
                 order.setStatusInfo("No exchange is active at the moment.");
                 orderRepository.save(order);
+                log.info("No Exchange is active at the moment.");
             }
         }catch (WalletNotFoundException exception){
+            log.info("Wallet information not found for order {}", order);
             order.setStatus(OrderStatus.INVALID);
             order.setStatusInfo(exception.getMessage() + "ORDER ID :" + exception.getOrderId());
             order = orderRepository.save(order);
         }
 
         log.info("State of Order order: {}", order);
+
     }
 
-    /**
-     * Buy operation.
-     *
-     * @param receivedOrder the received order
-     * @param wallet        the wallet
-     * @param exchangeOne   the exchange one
-     * @param exchangeTwo   the exchange two
-     */
     @Transactional
     Order  buyOperation(Order receivedOrder, Wallet wallet, ExchangeDto exchangeOne, ExchangeDto exchangeTwo) {
         /* 0. TODO: Verify Daily Buy Limit is not up. (We have a buy limit for each product)
@@ -142,67 +135,88 @@ public class CreateOrderListenerImpl implements MessageListener {
         try{
             // Sufficient Bal Check
             if (wallet.getBalance() >= receivedOrder.getQuantity() * receivedOrder.getPrice() ){
-                    // Reach into Search for sum of quantities available that matches the quantity to be traded
-                    List<? extends Ticker> availableFinancialProductsOnMarket = findAppropriateTickerInformationFromOrderForBuyOperation(receivedOrder, exchangeOne,exchangeTwo);
+                // Reach into Search for sum of quantities available that matches the quantity to be traded
+                MarketDataDto marketDataDtoOne = redisService.getMarketDataFromHash(receivedOrder.getTicker(), exchangeOne.getId());
+                MarketDataDto marketDataDtoTwo = redisService.getMarketDataFromHash(receivedOrder.getTicker(), exchangeTwo.getId());
 
-                    // Publish information to exchange
-                    int quantitySent = 0;
-                    for (Ticker marketProductForSale : availableFinancialProductsOnMarket) {
-                        // 1. Get to know the exchange
-                      ExchangeDto exchange = exchangeOne.getBaseUrl().equalsIgnoreCase(marketProductForSale.getExchangeURL()) ? exchangeOne : exchangeTwo;
+                if (
+                        (receivedOrder.getPrice() < (marketDataDtoOne.getLastTradedPrice() - marketDataDtoOne.getMaxPriceShift())) &&
+                                (receivedOrder.getPrice() < (marketDataDtoTwo.getLastTradedPrice() - marketDataDtoTwo.getMaxPriceShift()))
+                ) {
+                    receivedOrder.setStatus(OrderStatus.INVALID);
+                    receivedOrder.setStatusInfo("order price too low for market");
 
-                      // 2. TODO: Verify Quantities are publishable to exchange
+                    return orderRepository.save(receivedOrder);
+                }
 
-                        if (quantitySent < receivedOrder.getQuantity() )   {
 
-                            receivedOrder.setStatus(OrderStatus.PROCESSING);
-                            receivedOrder.setStatusInfo("Order partially Processed");
+                List<? extends Ticker> availableFinancialProductsOnMarket = findAppropriateTickerInformationFromOrderForBuyOperation(receivedOrder, exchangeOne,exchangeTwo);
+
+                // Publish information to exchange
+                int quantitySent = 0;
+                for (Ticker marketProductForSale : availableFinancialProductsOnMarket) {
+                    // 1. Get to know the exchange
+                    ExchangeDto exchange = exchangeOne.getBaseUrl().equalsIgnoreCase(marketProductForSale.getExchangeURL()) ? exchangeOne : exchangeTwo;
+
+                    if (quantitySent < receivedOrder.getQuantity() )   {
+
+                        receivedOrder.setStatus(OrderStatus.OPEN);
+                        receivedOrder.setStatusInfo("Order partially Processed");
+                        receivedOrder = orderRepository.save(receivedOrder);
+
+                        int quantityToSend = receivedOrder.getQuantity() - quantitySent;
+
+                        if(marketProductForSale.getQuantity() > quantityToSend ){
+                            // Reduce Account Balance with Corresponding Amount
+                            wallet = updateBalanceOfClientsWallet(wallet, (quantityToSend * marketProductForSale.getPrice()));
+                            receivedOrder = updateOrderStatusForQuantityProcessed(receivedOrder,quantityToSend);
+
+                            String orderIdReturnedFromExchange = sendOrderToExchange(
+                                    receivedOrder,
+                                    marketProductForSale.getPrice(),
+                                    exchange,
+                                    quantityToSend
+                            );
+                            receivedOrder.getOrderInformation()
+                                    .add(new OrderInformationDto(exchange.getBaseUrl(), orderIdReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING, marketProductForSale.getPrice()));
                             receivedOrder = orderRepository.save(receivedOrder);
+                            quantitySent += quantityToSend ;
 
-                            int quantityToSend = receivedOrder.getQuantity() - quantitySent;
+                        }else {
+                            wallet = updateBalanceOfClientsWallet(wallet, marketProductForSale.getQuantity() * marketProductForSale.getPrice());
+                            receivedOrder = updateOrderStatusForQuantityProcessed(receivedOrder, marketProductForSale.getQuantity());
 
-                            if(marketProductForSale.getQuantity() > quantityToSend ){
-                                // Reduce Account Balance with Corresponding Amount
-                                wallet = updateBalanceOfClientsWallet(wallet, (quantityToSend * marketProductForSale.getPrice()));
-                                receivedOrder = updateOrderStatusForQuantityProcessed(receivedOrder,quantityToSend);
-
-                                String orderIdReturnedFromExchange = sendOrderToExchange(
-                                        receivedOrder,
-                                        marketProductForSale.getPrice(),
-                                        exchange,
-                                        quantityToSend
-                                );
-                                receivedOrder.getOrderInformation()
-                                        .add(new OrderInformationDto(exchange.getBaseUrl(), orderIdReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING));
-                                receivedOrder = orderRepository.save(receivedOrder);
-                                quantitySent += quantityToSend ;
-
-                            }else {
-                                wallet = updateBalanceOfClientsWallet(wallet, marketProductForSale.getQuantity() * marketProductForSale.getPrice());
-                                receivedOrder = updateOrderStatusForQuantityProcessed(receivedOrder, marketProductForSale.getQuantity());
-
-                                String orderIdReturnedFromExchange = sendOrderToExchange(
-                                        receivedOrder,
-                                        marketProductForSale.getPrice(),
-                                        exchange,
-                                        marketProductForSale.getQuantity()
-                                );
+                            String orderIdReturnedFromExchange = sendOrderToExchange(
+                                    receivedOrder,
+                                    marketProductForSale.getPrice(),
+                                    exchange,
+                                    marketProductForSale.getQuantity()
+                            );
 
                                 receivedOrder.getOrderInformation()
-                                        .add(new OrderInformationDto(exchange.getBaseUrl(), orderIdReturnedFromExchange, marketProductForSale.getQuantity(), 0, OrderItemStatus.PENDING));
-
+                                        .add(new OrderInformationDto(
+                                                exchange.getBaseUrl(),
+                                                orderIdReturnedFromExchange,
+                                                marketProductForSale.getQuantity(),
+                                                0,
+                                                orderIdReturnedFromExchange.equals("") ? OrderItemStatus.FAILED : OrderItemStatus.PENDING,
+                                                marketProductForSale.getPrice()
+                                            )
+                                        );
                                 receivedOrder = orderRepository.save(receivedOrder);
                                 quantitySent += marketProductForSale.getQuantity();
 
-                            }
-                        }else {
-                         receivedOrder.setStatus(OrderStatus.PROCESSED);
-                         receivedOrder.setStatusInfo("Order processed");
-                         receivedOrder = orderRepository.save(receivedOrder);
-                        }
-                    }
 
-                }else{
+
+                        }
+                    }else {
+                        receivedOrder.setStatus(OrderStatus.OPEN);
+                        receivedOrder.setStatusInfo("Order processed");
+                        receivedOrder = orderRepository.save(receivedOrder);
+                    }
+                }
+
+            }else{
 
                 throw new InsufficientWalletBalanceException("Wallet balance is insufficient for the order");
             }
@@ -216,15 +230,6 @@ public class CreateOrderListenerImpl implements MessageListener {
         return  receivedOrder;
     }
 
-
-    /**
-     * Sell operation.
-     *
-     * @param receivedOrder the received order
-     * @param wallet        the wallet
-     * @param exchangeOne   the exchange one
-     * @param exchangeTwo   the exchange two
-     */
     @Transactional
     Order sellOperation(Order receivedOrder,Wallet wallet, ExchangeDto exchangeOne, ExchangeDto exchangeTwo) {
 
@@ -268,9 +273,9 @@ public class CreateOrderListenerImpl implements MessageListener {
 
                 int quantitySent = 0;
                 ExchangeDto exchange = exchangeOne.getBaseUrl().equalsIgnoreCase(marketProductForSale.getExchangeURL()) ? exchangeOne : exchangeTwo;
-
+                receivedOrder.setStatus(OrderStatus.OPEN);
                 if (quantitySent < receivedOrder.getQuantity() )   {
-                    receivedOrder.setStatus(OrderStatus.PROCESSING);
+
                     receivedOrder.setStatusInfo("Order partially Processed");
                     receivedOrder = orderRepository.save(receivedOrder);
 
@@ -282,7 +287,7 @@ public class CreateOrderListenerImpl implements MessageListener {
                         receivedOrder
                                 .getOrderInformation()
                                 .add(new OrderInformationDto(exchange.getBaseUrl(),
-                                        idReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING));
+                                        idReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING, marketProductForSale.getPrice()));
 
                     }else {
                         itemToSell.setQuantity(receivedOrder.getQuantity());
@@ -291,10 +296,9 @@ public class CreateOrderListenerImpl implements MessageListener {
                         receivedOrder
                                 .getOrderInformation()
                                 .add(new OrderInformationDto(exchange.getBaseUrl(),
-                                        idReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING));
+                                        idReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING, marketProductForSale.getPrice()));
                     }
                 }else {
-                    receivedOrder.setStatus(OrderStatus.PROCESSED);
                     receivedOrder.setStatusInfo("Order processed");
                     receivedOrder = orderRepository.save(receivedOrder);
                 }
@@ -320,42 +324,30 @@ public class CreateOrderListenerImpl implements MessageListener {
                 .body(Mono.just(malonOrderRequest), MalonOrderRequest.class)
                 .retrieve()
                 .bodyToMono(String.class)
-                .map(retreivedId ->  retreivedId.substring(1, retreivedId.length()-1))
+                .map(received ->  received.substring(1, received.length()-1))
                 .doOnError(throwable -> {
-                    // TODO: Action if an Error Occurs whilst publishing
+                    log.info("Processing Order Item failed");
                 })
                 .onErrorReturn("")
                 .block();
     }
 
-
     private ExchangeDto getExchangeDetailsFromHash(ExchangeName exchangeName){
-        String exchangeInfo = hashOperations.get(exchangeName.name(),exchangeName.name());
-        ExchangeDto exchangeDto = gson.fromJson(exchangeInfo, ExchangeDto.class);
+        ExchangeDto exchangeDto = redisService.getExchangeDetailsFromHash(exchangeName);
         exchangeDto.setApiKey(exchangeName.equals(ExchangeName.EXCHANGE_ONE)? exchangeOneApiKey : exchangeTwoApiKey);
         return exchangeDto;
     }
-
 
     private Wallet updateBalanceOfClientsWallet(Wallet wallet, double amountToDebitClientAccount) {
         wallet.setBalance(wallet.getBalance() - amountToDebitClientAccount);
         return walletRepository.save(wallet);
     }
 
-
-    private MarketDataDto getMarketDataFromHash(String ticker, String exchangeId){
-        String dataKey = ticker+"_"+exchangeId;
-        return gson.fromJson(hashOperations.get(dataKey, dataKey), MarketDataDto.class);
-    }
-
-
     private Order updateOrderStatusForQuantityProcessed(Order receivedOrder, int quantityToProcess) {
 
         receivedOrder.setQuantityProcessed(receivedOrder.getQuantityProcessed() + quantityToProcess);
         return orderRepository.save(receivedOrder);
-
     }
-
 
     private List<? extends Ticker> findAppropriateTickerInformationFromOrderForBuyOperation
             (Order receivedOrder, ExchangeDto exchangeOne, ExchangeDto exchangeTwo) {
@@ -471,6 +463,8 @@ public class CreateOrderListenerImpl implements MessageListener {
     private List<? extends Ticker> getTickers
             (Order receivedOrder, ExchangeDto exchangeOne, ExchangeDto exchangeTwo, List<? extends Ticker> items) {
         List<Ticker> selectedItems = new ArrayList<>();
+        log.info("exchange one {}", exchangeOne);
+        log.info("exchange two {}", exchangeTwo);
         int quantity = 0;
         for (Ticker item: items){
             if ((
@@ -482,7 +476,7 @@ public class CreateOrderListenerImpl implements MessageListener {
             )
                     && receivedOrder.getQuantity() >= quantity
             ){
-                quantity += receivedOrder.getQuantity();
+                quantity += item.getQuantity();
                 selectedItems.add(item);
             }
 
@@ -515,3 +509,4 @@ public class CreateOrderListenerImpl implements MessageListener {
 
 
 }
+
