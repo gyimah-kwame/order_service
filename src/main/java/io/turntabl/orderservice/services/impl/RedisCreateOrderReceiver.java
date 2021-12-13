@@ -2,6 +2,7 @@ package io.turntabl.orderservice.services.impl;
 
 import com.google.gson.Gson;
 import io.turntabl.orderservice.dtos.ExchangeDto;
+import io.turntabl.orderservice.dtos.MarketDataDto;
 import io.turntabl.orderservice.dtos.OrderInformationDto;
 import io.turntabl.orderservice.dtos.PortfolioDto;
 import io.turntabl.orderservice.enums.ExchangeName;
@@ -135,6 +136,20 @@ public class RedisCreateOrderReceiver {
             // Sufficient Bal Check
             if (wallet.getBalance() >= receivedOrder.getQuantity() * receivedOrder.getPrice() ){
                 // Reach into Search for sum of quantities available that matches the quantity to be traded
+                MarketDataDto marketDataDtoOne = redisService.getMarketDataFromHash(receivedOrder.getTicker(), exchangeOne.getId());
+                MarketDataDto marketDataDtoTwo = redisService.getMarketDataFromHash(receivedOrder.getTicker(), exchangeTwo.getId());
+
+                if (
+                        (receivedOrder.getPrice() < (marketDataDtoOne.getLastTradedPrice() - marketDataDtoOne.getMaxPriceShift())) &&
+                                (receivedOrder.getPrice() < (marketDataDtoTwo.getLastTradedPrice() - marketDataDtoTwo.getMaxPriceShift()))
+                ) {
+                    receivedOrder.setStatus(OrderStatus.INVALID);
+                    receivedOrder.setStatusInfo("order price too low for market");
+
+                    return orderRepository.save(receivedOrder);
+                }
+
+
                 List<? extends Ticker> availableFinancialProductsOnMarket = findAppropriateTickerInformationFromOrderForBuyOperation(receivedOrder, exchangeOne,exchangeTwo);
 
                 // Publish information to exchange
@@ -142,9 +157,6 @@ public class RedisCreateOrderReceiver {
                 for (Ticker marketProductForSale : availableFinancialProductsOnMarket) {
                     // 1. Get to know the exchange
                     ExchangeDto exchange = exchangeOne.getBaseUrl().equalsIgnoreCase(marketProductForSale.getExchangeURL()) ? exchangeOne : exchangeTwo;
-
-                    // 2. TODO: Verify Quantities are publishable to exchange
-
 
                     if (quantitySent < receivedOrder.getQuantity() )   {
 
@@ -166,7 +178,7 @@ public class RedisCreateOrderReceiver {
                                     quantityToSend
                             );
                             receivedOrder.getOrderInformation()
-                                    .add(new OrderInformationDto(exchange.getBaseUrl(), orderIdReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING));
+                                    .add(new OrderInformationDto(exchange.getBaseUrl(), orderIdReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING, marketProductForSale.getPrice()));
                             receivedOrder = orderRepository.save(receivedOrder);
                             quantitySent += quantityToSend ;
 
@@ -181,11 +193,20 @@ public class RedisCreateOrderReceiver {
                                     marketProductForSale.getQuantity()
                             );
 
-                            receivedOrder.getOrderInformation()
-                                    .add(new OrderInformationDto(exchange.getBaseUrl(), orderIdReturnedFromExchange, marketProductForSale.getQuantity(), 0, OrderItemStatus.PENDING));
+                                receivedOrder.getOrderInformation()
+                                        .add(new OrderInformationDto(
+                                                exchange.getBaseUrl(),
+                                                orderIdReturnedFromExchange,
+                                                marketProductForSale.getQuantity(),
+                                                0,
+                                                orderIdReturnedFromExchange.equals("") ? OrderItemStatus.FAILED : OrderItemStatus.PENDING,
+                                                marketProductForSale.getPrice()
+                                            )
+                                        );
+                                receivedOrder = orderRepository.save(receivedOrder);
+                                quantitySent += marketProductForSale.getQuantity();
 
-                            receivedOrder = orderRepository.save(receivedOrder);
-                            quantitySent += marketProductForSale.getQuantity();
+
 
                         }
                     }else {
@@ -266,7 +287,7 @@ public class RedisCreateOrderReceiver {
                         receivedOrder
                                 .getOrderInformation()
                                 .add(new OrderInformationDto(exchange.getBaseUrl(),
-                                        idReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING));
+                                        idReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING, marketProductForSale.getPrice()));
 
                     }else {
                         itemToSell.setQuantity(receivedOrder.getQuantity());
@@ -275,7 +296,7 @@ public class RedisCreateOrderReceiver {
                         receivedOrder
                                 .getOrderInformation()
                                 .add(new OrderInformationDto(exchange.getBaseUrl(),
-                                        idReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING));
+                                        idReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING, marketProductForSale.getPrice()));
                     }
                 }else {
                     receivedOrder.setStatusInfo("Order processed");
@@ -305,8 +326,7 @@ public class RedisCreateOrderReceiver {
                 .bodyToMono(String.class)
                 .map(received ->  received.substring(1, received.length()-1))
                 .doOnError(throwable -> {
-                    // TODO: Action if an Error Occurs whilst publishing
-
+                    log.info("Processing Order Item failed");
                 })
                 .onErrorReturn("")
                 .block();
@@ -443,6 +463,8 @@ public class RedisCreateOrderReceiver {
     private List<? extends Ticker> getTickers
             (Order receivedOrder, ExchangeDto exchangeOne, ExchangeDto exchangeTwo, List<? extends Ticker> items) {
         List<Ticker> selectedItems = new ArrayList<>();
+        log.info("exchange one {}", exchangeOne);
+        log.info("exchange two {}", exchangeTwo);
         int quantity = 0;
         for (Ticker item: items){
             if ((
@@ -454,7 +476,7 @@ public class RedisCreateOrderReceiver {
             )
                     && receivedOrder.getQuantity() >= quantity
             ){
-                quantity += receivedOrder.getQuantity();
+                quantity += item.getQuantity();
                 selectedItems.add(item);
             }
 

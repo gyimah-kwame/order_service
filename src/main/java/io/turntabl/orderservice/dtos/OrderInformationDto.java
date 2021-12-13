@@ -20,4 +20,6 @@ public class OrderInformationDto {
 
     private OrderItemStatus status;
 
+    private double price;
+
 }

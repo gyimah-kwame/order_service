@@ -58,6 +58,7 @@ public class Order {
         order.quantity = dto.getQuantity();
         order.ticker = dto.getTicker();
 
+
         return order;
     }
 
