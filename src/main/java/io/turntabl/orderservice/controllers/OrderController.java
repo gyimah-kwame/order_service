@@ -60,8 +60,8 @@ public class OrderController {
     }
 
 
-    @GetMapping("/orders")
-    public List<OrderDto> getOrdersByUserId(@RequestParam String userId, @AuthenticationPrincipal Jwt principal) {
+    @GetMapping("/users/{userId}/orders")
+    public List<OrderDto> getOrdersByUserId(@PathVariable String userId, @AuthenticationPrincipal Jwt principal) {
         log.info("Retrieving order for  user with id {} {}", userId, principal.getSubject());
         return orderService.getAllOrders(userId);
     }
