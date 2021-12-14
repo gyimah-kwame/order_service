@@ -5,10 +5,7 @@ import io.turntabl.orderservice.services.WalletService;
 import lombok.AllArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -24,4 +21,11 @@ public class PortfolioController {
     public List<PortfolioDto> getUserPortfolios(@AuthenticationPrincipal Jwt principal) {
         return walletService.getUserPortfolios(principal.getSubject());
     }
+
+    @GetMapping("/users/{userId}/portfolios")
+    public List<PortfolioDto> getPortfolioByUserId(@PathVariable String userId, @AuthenticationPrincipal Jwt principal) {
+        return walletService.getUserPortfolios(userId);
+    }
+
+
 }
