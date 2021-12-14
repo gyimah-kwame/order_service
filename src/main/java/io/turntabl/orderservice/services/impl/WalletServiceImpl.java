@@ -24,6 +24,7 @@ public class WalletServiceImpl implements WalletService {
 
     @Override
     public WalletDto createWallet(String userId) {
+        log.info("user id {}", userId);
         Optional<Wallet> userWallet = walletRepository.findById(userId);
         Wallet wallet = userWallet.orElse(walletRepository.save(new Wallet(userId, 10_000.00, new ArrayList<>())));
         log.info("Returning Wallet Information for {}", userId);
