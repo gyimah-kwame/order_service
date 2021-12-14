@@ -71,9 +71,10 @@ public interface OrderService {
      * Gets all orders.
      *
      * @param userId the user id
+     * @param status status of the order
      * @return the all orders
      */
-    List<OrderDto> getAllOrders(String userId);
+    List<OrderDto> getAllOrders(String userId, String status);
 
 //    OrderDto findById(String orderId);
 

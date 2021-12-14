@@ -30,9 +30,9 @@ public class OrderController {
     }
 
     @GetMapping("/orders")
-    public List<OrderDto> getOrders( @AuthenticationPrincipal Jwt principal) {
+    public List<OrderDto> getOrders(@RequestParam(required = false) String status, @AuthenticationPrincipal Jwt principal) {
         log.info("Retrieving order for  user {}",principal.getSubject());
-        return orderService.getAllOrders(principal.getSubject());
+        return orderService.getAllOrders(principal.getSubject(), status);
     }
 
     @GetMapping("/orders/all")
@@ -61,9 +61,9 @@ public class OrderController {
 
 
     @GetMapping("/users/{userId}/orders")
-    public List<OrderDto> getOrdersByUserId(@PathVariable String userId, @AuthenticationPrincipal Jwt principal) {
+    public List<OrderDto> getOrdersByUserId(@PathVariable String userId, @RequestParam(required = false) String status, @AuthenticationPrincipal Jwt principal) {
         log.info("Retrieving order for  user with id {} {}", userId, principal.getSubject());
-        return orderService.getAllOrders(userId);
+        return orderService.getAllOrders(userId, status);
     }
 
 

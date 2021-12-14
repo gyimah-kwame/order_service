@@ -27,6 +27,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import javax.servlet.annotation.WebListener;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -148,8 +149,14 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public List<OrderDto> getAllOrders(String userId) {
-        return orderRepository.findByUserId(userId)
+    public List<OrderDto> getAllOrders(String userId, String status) {
+        if (status == null || status.equals("")) {
+            return orderRepository.findByUserId(userId)
+                    .stream()
+                    .map(OrderDto::fromEntity)
+                    .collect(Collectors.toList());
+        }
+        return orderRepository.findByUserIdAndStatus(userId, status.toUpperCase())
                 .stream()
                 .map(OrderDto::fromEntity)
                 .collect(Collectors.toList());
