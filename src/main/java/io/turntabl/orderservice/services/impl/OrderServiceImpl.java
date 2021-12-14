@@ -16,12 +16,16 @@ import io.turntabl.orderservice.services.OrderService;
 import io.turntabl.orderservice.services.RedisService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.reactive.function.client.WebClient;
 
+import javax.servlet.annotation.WebListener;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -34,12 +38,22 @@ import java.util.stream.Collectors;
 @Service
 @Transactional
 @Slf4j
-@AllArgsConstructor // This allows for auto wiring through constructor for dependencies.
 public class OrderServiceImpl implements OrderService {
 
-    private final OrderRepository orderRepository;
-    private final WalletRepository walletRepository;
-    private final RedisService redisService;
+    @Autowired
+    private  OrderRepository orderRepository;
+    @Autowired
+    private  WalletRepository walletRepository;
+    @Autowired
+    private  RedisService redisService;
+    @Autowired
+    private  WebClient webClient;
+
+    @Value("${matraining.exchange.one.token}")
+    private String exchangeOneApiKey;
+
+    @Value("${matraining.exchange.two.token}")
+    private String exchangeTwoApiKey;
 
 
     /**
@@ -108,11 +122,29 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public void deleteOrder(String orderID, String userId) {
+    public void cancelOrder(String orderID, String userId) {
+
         Order order = orderRepository.findByIdAndUserId(orderID, userId)
                 .orElseThrow(() -> new OrderNotFoundException(String.format("order with id %s does not exists", orderID)));
 
-        orderRepository.delete(order);
+        // Make a call to cancel order on exchange. If successful set status to canceled
+        Optional<Order> updatedOrder = order.getOrderInformation()
+                .stream()
+                .filter(orderInfo -> orderInfo.getOrderId().equals(orderID))
+                .findFirst()
+                .map(orderInfo -> {
+                    String exchangeId = orderInfo.getExchangeUrl().equalsIgnoreCase("97b5fa07-08a2-43e8-9df8-9071a48da02c") ? exchangeOneApiKey : exchangeTwoApiKey;
+                    boolean result = Boolean.TRUE.equals(webClient
+                            .delete()
+                            .uri(orderInfo.getExchangeUrl() + "/" + exchangeId + "/order/" + orderInfo.getOrderId())
+                            .retrieve()
+                            .bodyToMono(Boolean.class)
+                            .doOnError(throwable -> log.info("Error Occurred during order cancellation {}", orderInfo.getOrderId()))
+                            .onErrorReturn(false).block());
+                    orderInfo.setStatus(result ? OrderItemStatus.CANCEL : OrderItemStatus.FULFILLED);
+                    return orderRepository.save(order);
+                });
+        log.info("{}" , updatedOrder.orElse(new Order()));
     }
 
     @Override
