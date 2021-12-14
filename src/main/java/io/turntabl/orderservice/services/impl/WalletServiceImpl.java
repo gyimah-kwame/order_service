@@ -26,7 +26,10 @@ public class WalletServiceImpl implements WalletService {
     public WalletDto createWallet(String userId) {
         log.info("user id a {}", userId);
         Optional<Wallet> userWallet = walletRepository.findById(userId);
-        Wallet wallet = userWallet.orElse(walletRepository.save(new Wallet(userId, 10_000.00, new ArrayList<>())));
+        if (userWallet.isPresent()) {
+            return  WalletDto.fromModel(userWallet.get());
+        }
+        Wallet wallet = new Wallet(userId, 10_000.00, new ArrayList<>());
         log.info("Returning Wallet Information for {}", userId);
         return WalletDto.fromModel(wallet);
     }

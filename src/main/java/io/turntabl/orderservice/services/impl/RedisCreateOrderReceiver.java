@@ -186,7 +186,7 @@ public class RedisCreateOrderReceiver {
                             quantitySent += quantityToSend ;
 
                         }else {
-                            wallet = updateBalanceOfClientsWallet(wallet, marketProductForSale.getQuantity() * marketProductForSale.getPrice());
+                            wallet = updateBalanceOfClientsWallet(wallet, marketProductForSale.getQuantity() * receivedOrder.getPrice());
                             receivedOrder = updateOrderStatusForQuantityProcessed(receivedOrder, marketProductForSale.getQuantity());
 
                             String orderIdReturnedFromExchange = sendOrderToExchange(
