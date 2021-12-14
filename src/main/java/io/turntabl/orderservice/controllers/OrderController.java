@@ -56,7 +56,14 @@ public class OrderController {
     @ResponseStatus(code = HttpStatus.NO_CONTENT)
     public void cancelOrder(@PathVariable String id,  @AuthenticationPrincipal Jwt principal) {
         log.info("Deleting order for user {}",principal.getSubject());
-        orderService.deleteOrder(id, principal.getSubject());
+        orderService.cancelOrder(id, principal.getSubject());
+    }
+
+
+    @GetMapping("/orders")
+    public List<OrderDto> getOrdersByUserId(@RequestParam String userId, @AuthenticationPrincipal Jwt principal) {
+        log.info("Retrieving order for  user with id {} {}", userId, principal.getSubject());
+        return orderService.getAllOrders(userId);
     }
 
 

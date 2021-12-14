@@ -2,7 +2,6 @@ package io.turntabl.orderservice.services;
 
 import io.turntabl.orderservice.enums.OrderItemStatus;
 import io.turntabl.orderservice.dtos.OrderDto;
-import io.turntabl.orderservice.requests.OrderRequest;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -55,7 +54,7 @@ public interface OrderService {
      * @param id     the id
      * @param userId the user id
      */
-    void deleteOrder(String id, String userId);
+    void cancelOrder(String id, String userId);
 
     /**
      * Update order status.
