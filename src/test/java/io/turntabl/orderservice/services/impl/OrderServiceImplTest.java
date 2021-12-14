@@ -12,19 +12,15 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.runner.Request;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.RedisTemplate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("Order Service Tests")
 @ExtendWith(MockitoExtension.class)
@@ -57,7 +53,7 @@ class OrderServiceImplTest {
     @DisplayName("Test Update Order")
     void updateOrder() {
         Mockito.when(orderRepository
-                        .findByIdAndUserIdOrderByCreatedAt(ArgumentMatchers.anyString(),ArgumentMatchers.anyString()))
+                        .findByIdAndUserIdOrderByCreatedAtDesc(ArgumentMatchers.anyString(),ArgumentMatchers.anyString()))
                 .thenReturn(Optional.of(new Order("124", new ArrayList<>(),"1234", Side.SELL,12.0,100,0,"AMZ", OrderStatus.PENDING, "",LocalDateTime.now(), LocalDateTime.now())));
 
         Mockito.when(orderRepository.save(ArgumentMatchers.any()))
@@ -71,7 +67,7 @@ class OrderServiceImplTest {
     @DisplayName("Expect Exception when Order is not found")
     void updateOrderException() {
         Mockito.when(orderRepository
-                        .findByIdAndUserIdOrderByCreatedAt(ArgumentMatchers.anyString(),ArgumentMatchers.anyString()))
+                        .findByIdAndUserIdOrderByCreatedAtDesc(ArgumentMatchers.anyString(),ArgumentMatchers.anyString()))
                 .thenReturn(Optional.empty());
 
         Assertions.assertThatExceptionOfType(OrderNotFoundException.class)

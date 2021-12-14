@@ -11,23 +11,16 @@ import io.turntabl.orderservice.models.Order;
 import io.turntabl.orderservice.models.Wallet;
 import io.turntabl.orderservice.repositories.OrderRepository;
 import io.turntabl.orderservice.repositories.WalletRepository;
-import io.turntabl.orderservice.requests.OrderRequest;
 import io.turntabl.orderservice.services.OrderService;
 import io.turntabl.orderservice.services.RedisService;
-import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 
-import javax.servlet.annotation.WebListener;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -88,7 +81,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public OrderDto updateOrder(String existingOrderId, String userId, OrderDto requestDTO) {
 
-        Order order = orderRepository.findByIdAndUserIdOrderByCreatedAt(existingOrderId, userId).orElseThrow(() ->
+        Order order = orderRepository.findByIdAndUserIdOrderByCreatedAtDesc(existingOrderId, userId).orElseThrow(() ->
                 new OrderNotFoundException(String.format("order with id %s does not exists", existingOrderId)));
 
         order.setPrice(requestDTO.getPrice());
@@ -108,7 +101,7 @@ public class OrderServiceImpl implements OrderService {
      */
     @Override
     public List<OrderDto> findOrdersByStatus(String status) {
-        return orderRepository.findByStatusOrderByCreatedAt(status)
+        return orderRepository.findByStatusOrderByCreatedAtDesc(status)
                 .stream()
                 .map(OrderDto::fromEntity)
                 .collect(Collectors.toList());
@@ -116,7 +109,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public List<OrderDto> getUserOrdersByStatus(String userId, String status) {
-        return orderRepository.findByUserIdAndStatusOrderByCreatedAt(userId, status.toUpperCase())
+        return orderRepository.findByUserIdAndStatusOrderByCreatedAtDesc(userId, status.toUpperCase())
                 .stream()
                 .map(OrderDto::fromEntity)
                 .collect(Collectors.toList());
@@ -125,7 +118,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public void cancelOrder(String orderId, String legId, String userId) {
 
-        Order order = orderRepository.findByIdAndUserIdOrderByCreatedAt(orderId, userId)
+        Order order = orderRepository.findByIdAndUserIdOrderByCreatedAtDesc(orderId, userId)
                 .orElseThrow(() -> new OrderNotFoundException(String.format("order with id %s does not exists", orderId)));
 
         // Make a call to cancel order on exchange. If successful set status to canceled
@@ -151,12 +144,12 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public List<OrderDto> getAllOrders(String userId, String status) {
         if (status == null || status.equals("")) {
-            return orderRepository.findByUserIdOrderByCreatedAt(userId)
+            return orderRepository.findByUserIdOrderByCreatedAtDesc(userId)
                     .stream()
                     .map(OrderDto::fromEntity)
                     .collect(Collectors.toList());
         }
-        return orderRepository.findByUserIdAndStatusOrderByCreatedAt(userId, status.toUpperCase())
+        return orderRepository.findByUserIdAndStatusOrderByCreatedAtDesc(userId, status.toUpperCase())
                 .stream()
                 .map(OrderDto::fromEntity)
                 .collect(Collectors.toList());

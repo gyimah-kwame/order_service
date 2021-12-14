@@ -1,31 +1,20 @@
 package io.turntabl.orderservice.schedulers;
 
-import io.turntabl.orderservice.dtos.ExchangeDto;
-import io.turntabl.orderservice.dtos.OrderInformationDto;
 import io.turntabl.orderservice.enums.OrderItemStatus;
 import io.turntabl.orderservice.enums.OrderStatus;
-import io.turntabl.orderservice.dtos.OrderDto;
 import io.turntabl.orderservice.models.Order;
 import io.turntabl.orderservice.repositories.OrderRepository;
 import io.turntabl.orderservice.requests.MalonOrderRequest;
-import io.turntabl.orderservice.services.OrderService;
 import io.turntabl.orderservice.services.RedisService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.listener.ChannelTopic;
-import org.springframework.data.redis.listener.PatternTopic;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
-import java.util.Collection;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Component
 @Slf4j
@@ -49,7 +38,7 @@ public class SendFailedOrdersToExchange {
 
     @Scheduled(cron = "*/5 * * * * *")
     public void sendOpenOrders() {
-        List<Order> orders = orderRepository.findByStatusOrderByCreatedAt(OrderStatus.OPEN.name());
+        List<Order> orders = orderRepository.findByStatusOrderByCreatedAtDesc(OrderStatus.OPEN.name());
 
         for(Order order : orders) {
 
@@ -75,7 +64,7 @@ public class SendFailedOrdersToExchange {
 
     @Scheduled(cron = "*/5 * * * * *")
     public void sendPendingOrders() {
-        List<Order> orders = orderRepository.findByStatusOrderByCreatedAt(OrderStatus.PENDING.name());
+        List<Order> orders = orderRepository.findByStatusOrderByCreatedAtDesc(OrderStatus.PENDING.name());
 
         orders.forEach(order -> {
             redisService.convertAndSendToCreateOrderTopic(order.getId());

@@ -9,10 +9,7 @@ import io.turntabl.orderservice.enums.ExchangeName;
 import io.turntabl.orderservice.enums.OrderItemStatus;
 import io.turntabl.orderservice.enums.OrderStatus;
 import io.turntabl.orderservice.enums.Side;
-import io.turntabl.orderservice.exceptions.InsufficientWalletBalanceException;
-import io.turntabl.orderservice.exceptions.InvalidOrderException;
-import io.turntabl.orderservice.exceptions.OrderNotFoundException;
-import io.turntabl.orderservice.exceptions.WalletNotFoundException;
+import io.turntabl.orderservice.exceptions.*;
 import io.turntabl.orderservice.models.Order;
 import io.turntabl.orderservice.models.Wallet;
 import io.turntabl.orderservice.models.tickers.Ticker;
@@ -20,10 +17,12 @@ import io.turntabl.orderservice.repositories.OrderRepository;
 import io.turntabl.orderservice.repositories.WalletRepository;
 import io.turntabl.orderservice.repositories.tickers.*;
 import io.turntabl.orderservice.requests.MalonOrderRequest;
+import io.turntabl.orderservice.responses.OrderStatusResponse;
 import io.turntabl.orderservice.services.RedisService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -305,9 +304,9 @@ public class RedisCreateOrderReceiver {
              *    d) Sell  next batch at (A + 0.17*A)
              *    e) Sell  next batch at (A + 0.2*A)
              */
+            MarketDataDto marketDataDto = marketDataDtoOne.getAskPrice() > marketDataDtoTwo.getAskPrice() ? marketDataDtoOne : marketDataDtoTwo;
             if (availableFinancialProductsOnMarket.isEmpty()){
 
-                MarketDataDto marketDataDto = marketDataDtoOne.getAskPrice() > marketDataDtoTwo.getAskPrice() ? marketDataDtoOne : marketDataDtoTwo;
                 ExchangeDto exchange = exchangeOne.getId().equals(marketDataDto.getExchangeId()) ? exchangeOne : exchangeTwo;
                 double price = marketDataDto.getAskPrice() + (0.09 *  marketDataDto.getAskPrice());
                 String internalID = sendOrderToExchange(receivedOrder, price, exchange, receivedOrder.getQuantity());
@@ -331,26 +330,29 @@ public class RedisCreateOrderReceiver {
                         int quantityToSend = receivedOrder.getQuantity() - quantitySent;
                         if (marketProductForSale.getQuantity() > quantityToSend) {
                             itemToSell.setQuantity(itemToSell.getQuantity() - quantityToSend);
+                            log.info("PRICE TO BE SENT TO EXCHANGE , {}",(marketDataDto.getAskPrice() + marketDataDto.getMaxPriceShift()) );
                             wallet = walletRepository.save(wallet);
-                            String idReturnedFromExchange = sendOrderToExchange(receivedOrder, marketProductForSale.getPrice(), exchange, quantityToSend);
+                            String idReturnedFromExchange = sendOrderToExchange(receivedOrder, (marketDataDto.getAskPrice() + marketDataDto.getMaxPriceShift()), exchange, quantityToSend);
                             receivedOrder
                                     .getOrderInformation()
                                     .add(new OrderInformationDto(exchange.getBaseUrl(),
-                                            idReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING, marketProductForSale.getPrice()));
+                                            idReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING, marketDataDto.getAskPrice()+marketDataDto.getMaxPriceShift()));
 
                         } else {
                             itemToSell.setQuantity(receivedOrder.getQuantity());
                             wallet = walletRepository.save(wallet);
-                            String idReturnedFromExchange = sendOrderToExchange(receivedOrder, marketProductForSale.getPrice(), exchange, marketProductForSale.getQuantity());
+                            String idReturnedFromExchange = sendOrderToExchange(receivedOrder,marketDataDto.getAskPrice()+marketDataDto.getMaxPriceShift(), exchange, marketProductForSale.getQuantity());
                             receivedOrder
                                     .getOrderInformation()
                                     .add(new OrderInformationDto(exchange.getBaseUrl(),
                                             idReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING, marketProductForSale.getPrice()));
+
                         }
+                        receivedOrder.setStatusInfo("Order processed");
+                        receivedOrder = orderRepository.save(receivedOrder);
                     } else {
 
                         if(receivedOrder.getQuantity() > quantitySent){
-                            MarketDataDto marketDataDto = marketDataDtoOne.getAskPrice() > marketDataDtoTwo.getAskPrice() ? marketDataDtoOne : marketDataDtoTwo;
                             ExchangeDto exchangeDto = exchangeOne.getId().equals(marketDataDto.getExchangeId()) ? exchangeOne : exchangeTwo;
                             double price = marketDataDto.getAskPrice() + (0.09 *  marketDataDto.getAskPrice());
                             String internalID = sendOrderToExchange(receivedOrder, price, exchangeDto, receivedOrder.getQuantity());
@@ -384,9 +386,17 @@ public class RedisCreateOrderReceiver {
                 .uri(exchangeDto.getBaseUrl()+"/"+ exchangeDto.getApiKey() +"/order")
                 .body(Mono.just(malonOrderRequest), MalonOrderRequest.class)
                 .retrieve()
+                .onStatus(HttpStatus::is5xxServerError, response -> response.bodyToMono(OrderStatusResponse.class)
+                        .flatMap(error -> {
+                            log.info(error.getError());
+                            log.info(error.getMessage());
+//                            handleOrderStatusException(error.getMessage(), order.getId(), item.getOrderId());
+                            return Mono.error(new OrderStatusException(error.getMessage(), order.getId(), error.getMessage()));
+                        }))
                 .bodyToMono(String.class)
                 .map(received ->  received.substring(1, received.length()-1))
                 .doOnError(throwable -> {
+                    log.info(throwable.getMessage());
                     log.info("Processing Order Item failed");
                 })
                 .onErrorReturn("")

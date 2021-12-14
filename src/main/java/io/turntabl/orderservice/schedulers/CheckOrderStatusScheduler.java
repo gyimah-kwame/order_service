@@ -42,7 +42,7 @@ public class CheckOrderStatusScheduler {
     @Scheduled(cron = "*/2 * * * * *")
     public void checkOrderStatus() {
 
-        List<Order> orders = orderRepository.findByStatusOrderByCreatedAt(OrderStatus.OPEN.toString());
+        List<Order> orders = orderRepository.findByStatusOrderByCreatedAtDesc(OrderStatus.OPEN.toString());
 
         if (orders.size() == 0) return;
 
