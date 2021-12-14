@@ -49,7 +49,7 @@ public class SendFailedOrdersToExchange {
 
     @Scheduled(cron = "*/5 * * * * *")
     public void sendOpenOrders() {
-        List<Order> orders = orderRepository.findByStatus(OrderStatus.OPEN.name());
+        List<Order> orders = orderRepository.findByStatusOrderByCreatedAt(OrderStatus.OPEN.name());
 
         for(Order order : orders) {
 
@@ -75,7 +75,7 @@ public class SendFailedOrdersToExchange {
 
     @Scheduled(cron = "*/5 * * * * *")
     public void sendPendingOrders() {
-        List<Order> orders = orderRepository.findByStatus(OrderStatus.PENDING.name());
+        List<Order> orders = orderRepository.findByStatusOrderByCreatedAt(OrderStatus.PENDING.name());
 
         orders.forEach(order -> {
             redisService.convertAndSendToCreateOrderTopic(order.getId());

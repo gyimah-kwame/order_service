@@ -57,7 +57,7 @@ class OrderServiceImplTest {
     @DisplayName("Test Update Order")
     void updateOrder() {
         Mockito.when(orderRepository
-                        .findByIdAndUserId(ArgumentMatchers.anyString(),ArgumentMatchers.anyString()))
+                        .findByIdAndUserIdOrderByCreatedAt(ArgumentMatchers.anyString(),ArgumentMatchers.anyString()))
                 .thenReturn(Optional.of(new Order("124", new ArrayList<>(),"1234", Side.SELL,12.0,100,0,"AMZ", OrderStatus.PENDING, "",LocalDateTime.now(), LocalDateTime.now())));
 
         Mockito.when(orderRepository.save(ArgumentMatchers.any()))
@@ -71,7 +71,7 @@ class OrderServiceImplTest {
     @DisplayName("Expect Exception when Order is not found")
     void updateOrderException() {
         Mockito.when(orderRepository
-                        .findByIdAndUserId(ArgumentMatchers.anyString(),ArgumentMatchers.anyString()))
+                        .findByIdAndUserIdOrderByCreatedAt(ArgumentMatchers.anyString(),ArgumentMatchers.anyString()))
                 .thenReturn(Optional.empty());
 
         Assertions.assertThatExceptionOfType(OrderNotFoundException.class)

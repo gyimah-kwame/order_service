@@ -11,12 +11,12 @@ import java.util.Optional;
 @Repository
 public interface OrderRepository extends MongoRepository<Order, String> {
 
-    List<Order> findByUserId(String userId);
+    List<Order> findByUserIdOrderByCreatedAt(String userId);
 
-    Optional<Order> findByIdAndUserId(String id, String userId);
+    Optional<Order> findByIdAndUserIdOrderByCreatedAt(String id, String userId);
 
-    List<Order> findByUserIdAndStatus(String userId, String status);
+    List<Order> findByUserIdAndStatusOrderByCreatedAt(String userId, String status);
 
-    List<Order> findByStatus(String status);
+    List<Order> findByStatusOrderByCreatedAt(String status);
 
 }

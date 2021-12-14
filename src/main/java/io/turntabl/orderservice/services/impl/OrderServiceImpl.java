@@ -88,7 +88,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public OrderDto updateOrder(String existingOrderId, String userId, OrderDto requestDTO) {
 
-        Order order = orderRepository.findByIdAndUserId(existingOrderId, userId).orElseThrow(() ->
+        Order order = orderRepository.findByIdAndUserIdOrderByCreatedAt(existingOrderId, userId).orElseThrow(() ->
                 new OrderNotFoundException(String.format("order with id %s does not exists", existingOrderId)));
 
         order.setPrice(requestDTO.getPrice());
@@ -108,7 +108,7 @@ public class OrderServiceImpl implements OrderService {
      */
     @Override
     public List<OrderDto> findOrdersByStatus(String status) {
-        return orderRepository.findByStatus(status)
+        return orderRepository.findByStatusOrderByCreatedAt(status)
                 .stream()
                 .map(OrderDto::fromEntity)
                 .collect(Collectors.toList());
@@ -116,7 +116,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public List<OrderDto> getUserOrdersByStatus(String userId, String status) {
-        return orderRepository.findByUserIdAndStatus(userId, status.toUpperCase())
+        return orderRepository.findByUserIdAndStatusOrderByCreatedAt(userId, status.toUpperCase())
                 .stream()
                 .map(OrderDto::fromEntity)
                 .collect(Collectors.toList());
@@ -125,7 +125,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public void cancelOrder(String orderId, String legId, String userId) {
 
-        Order order = orderRepository.findByIdAndUserId(orderId, userId)
+        Order order = orderRepository.findByIdAndUserIdOrderByCreatedAt(orderId, userId)
                 .orElseThrow(() -> new OrderNotFoundException(String.format("order with id %s does not exists", orderId)));
 
         // Make a call to cancel order on exchange. If successful set status to canceled
@@ -151,12 +151,12 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public List<OrderDto> getAllOrders(String userId, String status) {
         if (status == null || status.equals("")) {
-            return orderRepository.findByUserId(userId)
+            return orderRepository.findByUserIdOrderByCreatedAt(userId)
                     .stream()
                     .map(OrderDto::fromEntity)
                     .collect(Collectors.toList());
         }
-        return orderRepository.findByUserIdAndStatus(userId, status.toUpperCase())
+        return orderRepository.findByUserIdAndStatusOrderByCreatedAt(userId, status.toUpperCase())
                 .stream()
                 .map(OrderDto::fromEntity)
                 .collect(Collectors.toList());
@@ -206,21 +206,22 @@ public class OrderServiceImpl implements OrderService {
         order.setOrderInformation(items);
 
 
-        long fulfilledItems = order
+        int fulfilledItems = order
                 .getOrderInformation()
                 .stream().filter(x -> x.getStatus() == OrderItemStatus.FULFILLED)
                 .mapToInt(OrderInformationDto::getQuantityFulfilled)
                 .sum();
 
+
         if (fulfilledItems == order.getQuantity()) {
 
             order.setStatus(OrderStatus.CLOSED);
+
 
             /*
                 update portfolio
              */
             Wallet wallet = walletRepository.findById(order.getUserId()).orElse(new Wallet());
-
 
             PortfolioDto portfolio = wallet
                     .getPortfolios()
@@ -229,10 +230,11 @@ public class OrderServiceImpl implements OrderService {
                     .findFirst()
                     .orElse(new PortfolioDto());
 
+
             portfolio.setTicker(order.getTicker());
 
-            int quantity = order.getSide() == Side.SELL ? portfolio.getQuantity() - orderItem.getQuantity()
-                    : portfolio.getQuantity() + orderItem.getQuantity();
+            int quantity = order.getSide() == Side.SELL ? portfolio.getQuantity() - fulfilledItems
+                    : portfolio.getQuantity() + fulfilledItems;
 
             portfolio.setQuantity(quantity);
 
