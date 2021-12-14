@@ -52,11 +52,11 @@ public class OrderController {
         return orderService.updateOrder(id, principal.getSubject(), OrderDto.fromRequest(orderRequest));
     }
 
-    @DeleteMapping("/orders/{id}")
+    @DeleteMapping("/orders/{orderId}/{legId}")
     @ResponseStatus(code = HttpStatus.NO_CONTENT)
-    public void cancelOrder(@PathVariable String id,  @AuthenticationPrincipal Jwt principal) {
+    public void cancelOrder(@PathVariable String orderId, @PathVariable String legId,  @AuthenticationPrincipal Jwt principal) {
         log.info("Deleting order for user {}",principal.getSubject());
-        orderService.cancelOrder(id, principal.getSubject());
+        orderService.cancelOrder(orderId, legId, principal.getSubject());
     }
 
 

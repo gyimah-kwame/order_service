@@ -51,10 +51,11 @@ public interface OrderService {
     /**
      * Delete order.
      *
-     * @param id     the id
+     * @param orderId     the id of the order (mongodb)
+     * @param legId    the id of the order at the exchange
      * @param userId the user id
      */
-    void cancelOrder(String id, String userId);
+    void cancelOrder(String orderId, String legId, String userId);
 
     /**
      * Update order status.

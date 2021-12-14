@@ -122,15 +122,15 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public void cancelOrder(String orderID, String userId) {
+    public void cancelOrder(String orderId, String legId, String userId) {
 
-        Order order = orderRepository.findByIdAndUserId(orderID, userId)
-                .orElseThrow(() -> new OrderNotFoundException(String.format("order with id %s does not exists", orderID)));
+        Order order = orderRepository.findByIdAndUserId(orderId, userId)
+                .orElseThrow(() -> new OrderNotFoundException(String.format("order with id %s does not exists", orderId)));
 
         // Make a call to cancel order on exchange. If successful set status to canceled
         Optional<Order> updatedOrder = order.getOrderInformation()
                 .stream()
-                .filter(orderInfo -> orderInfo.getOrderId().equals(orderID))
+                .filter(orderInfo -> orderInfo.getOrderId().equals(legId))
                 .findFirst()
                 .map(orderInfo -> {
                     String exchangeId = orderInfo.getExchangeUrl().equalsIgnoreCase("97b5fa07-08a2-43e8-9df8-9071a48da02c") ? exchangeOneApiKey : exchangeTwoApiKey;
