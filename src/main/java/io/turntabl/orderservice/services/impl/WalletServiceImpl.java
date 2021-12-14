@@ -29,7 +29,7 @@ public class WalletServiceImpl implements WalletService {
         if (userWallet.isPresent()) {
             return  WalletDto.fromModel(userWallet.get());
         }
-        Wallet wallet = new Wallet(userId, 10_000.00, new ArrayList<>());
+        Wallet wallet = walletRepository.save(new Wallet(userId, 10_000.00, new ArrayList<>()));
         log.info("Returning Wallet Information for {}", userId);
         return WalletDto.fromModel(wallet);
     }
