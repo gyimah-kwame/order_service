@@ -151,6 +151,10 @@ public class RedisCreateOrderReceiver {
 
                 List<? extends Ticker> availableFinancialProductsOnMarket = findAppropriateTickerInformationFromOrderForBuyOperation(receivedOrder, exchangeOne,exchangeTwo);
 
+                if (availableFinancialProductsOnMarket.isEmpty()){
+                    receivedOrder = processFinancialProducts(receivedOrder, exchangeOne, exchangeTwo, marketDataDtoOne, marketDataDtoTwo, receivedOrder.getQuantity());
+                }else {
+
                 // Publish information to exchange
                 int quantitySent = 0;
                 for (Ticker marketProductForSale : availableFinancialProductsOnMarket) {
@@ -211,7 +215,7 @@ public class RedisCreateOrderReceiver {
                     }else {
                         if (receivedOrder.getQuantity() > quantitySent ){
                             // Perform Personal Calculations and Send to exchange
-                            receivedOrder = processFinancialProducts(receivedOrder, exchangeOne, exchangeTwo, marketDataDtoOne, marketDataDtoTwo, quantitySent);
+                            receivedOrder = processFinancialProducts(receivedOrder, exchangeOne, exchangeTwo, marketDataDtoOne, marketDataDtoTwo, receivedOrder.getQuantity() - quantitySent);
                             quantitySent += (receivedOrder.getQuantity() - quantitySent) ;
                         }
                         receivedOrder.setStatus(OrderStatus.OPEN);
@@ -220,10 +224,9 @@ public class RedisCreateOrderReceiver {
                     }
                 }
 
-                if (availableFinancialProductsOnMarket.isEmpty()){
-                    receivedOrder = processFinancialProducts(receivedOrder, exchangeOne, exchangeTwo, marketDataDtoOne, marketDataDtoTwo, quantitySent);
                 }
-            }else{
+            }
+            else{
 
                 throw new InsufficientWalletBalanceException("Wallet balance is insufficient for the order");
             }
@@ -237,7 +240,12 @@ public class RedisCreateOrderReceiver {
         return  receivedOrder;
     }
 
-    private Order processFinancialProducts(Order receivedOrder, ExchangeDto exchangeOne, ExchangeDto exchangeTwo, MarketDataDto marketDataDtoOne, MarketDataDto marketDataDtoTwo, int quantitySent) {
+    private Order processFinancialProducts(Order receivedOrder,
+                                           ExchangeDto exchangeOne,
+                                           ExchangeDto exchangeTwo,
+                                           MarketDataDto marketDataDtoOne,
+                                           MarketDataDto marketDataDtoTwo,
+                                           int quantity) {
         MarketDataDto marketDataDto = marketDataDtoOne.getBidPrice() < marketDataDtoTwo.getBidPrice() ? marketDataDtoOne : marketDataDtoTwo;
         double price = marketDataDto.getBidPrice() - (0.09 *  marketDataDto.getBidPrice());
         ExchangeDto exchange = marketDataDto.getExchangeId().equals(exchangeOne.getId()) ? exchangeOne : exchangeTwo;
@@ -245,11 +253,11 @@ public class RedisCreateOrderReceiver {
                 receivedOrder,
                 price,
                 exchange,
-                receivedOrder.getQuantity() - quantitySent
+                quantity
         );
 
         receivedOrder.getOrderInformation()
-                .add(new OrderInformationDto(exchange.getBaseUrl(), orderIdReturnedFromExchange, (receivedOrder.getQuantity() - quantitySent), 0, OrderItemStatus.PENDING, price));
+                .add(new OrderInformationDto(exchange.getBaseUrl(), orderIdReturnedFromExchange, quantity, 0, OrderItemStatus.PENDING, price));
         receivedOrder = orderRepository.save(receivedOrder);
         return receivedOrder;
     }
@@ -297,43 +305,67 @@ public class RedisCreateOrderReceiver {
              *    d) Sell  next batch at (A + 0.17*A)
              *    e) Sell  next batch at (A + 0.2*A)
              */
+            if (availableFinancialProductsOnMarket.isEmpty()){
 
-            for (Ticker marketProductForSale: availableFinancialProductsOnMarket) {
+                MarketDataDto marketDataDto = marketDataDtoOne.getAskPrice() > marketDataDtoTwo.getAskPrice() ? marketDataDtoOne : marketDataDtoTwo;
+                ExchangeDto exchange = exchangeOne.getId().equals(marketDataDto.getExchangeId()) ? exchangeOne : exchangeTwo;
+                double price = marketDataDto.getAskPrice() + (0.09 *  marketDataDto.getAskPrice());
+                String internalID = sendOrderToExchange(receivedOrder, price, exchange, receivedOrder.getQuantity());
 
-                int quantitySent = 0;
-                ExchangeDto exchange = exchangeOne.getBaseUrl().equalsIgnoreCase(marketProductForSale.getExchangeURL()) ? exchangeOne : exchangeTwo;
-                receivedOrder.setStatus(OrderStatus.OPEN);
-                if (quantitySent < receivedOrder.getQuantity() )   {
+                receivedOrder
+                        .getOrderInformation()
+                        .add(new OrderInformationDto(exchange.getBaseUrl(),
+                                internalID, receivedOrder.getQuantity(), 0, OrderItemStatus.PENDING, price));
 
-                    receivedOrder.setStatusInfo("Order partially Processed");
-                    receivedOrder = orderRepository.save(receivedOrder);
+            }else {
+                for (Ticker marketProductForSale : availableFinancialProductsOnMarket) {
 
-                    int quantityToSend = receivedOrder.getQuantity() - quantitySent;
-                    if(marketProductForSale.getQuantity() > quantityToSend ){
-                        itemToSell.setQuantity(itemToSell.getQuantity() - quantityToSend);
-                        wallet = walletRepository.save(wallet);
-                        String idReturnedFromExchange = sendOrderToExchange(receivedOrder, marketProductForSale.getPrice(), exchange, quantityToSend);
-                        receivedOrder
-                                .getOrderInformation()
-                                .add(new OrderInformationDto(exchange.getBaseUrl(),
-                                        idReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING, marketProductForSale.getPrice()));
+                    int quantitySent = 0;
+                    ExchangeDto exchange = exchangeOne.getBaseUrl().equalsIgnoreCase(marketProductForSale.getExchangeURL()) ? exchangeOne : exchangeTwo;
+                    receivedOrder.setStatus(OrderStatus.OPEN);
+                    if (quantitySent < receivedOrder.getQuantity()) {
 
-                    }else {
-                        itemToSell.setQuantity(receivedOrder.getQuantity());
-                        wallet = walletRepository.save(wallet);
-                        String idReturnedFromExchange = sendOrderToExchange(receivedOrder, marketProductForSale.getPrice(), exchange, marketProductForSale.getQuantity());
-                        receivedOrder
-                                .getOrderInformation()
-                                .add(new OrderInformationDto(exchange.getBaseUrl(),
-                                        idReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING, marketProductForSale.getPrice()));
+                        receivedOrder.setStatusInfo("Order partially Processed");
+                        receivedOrder = orderRepository.save(receivedOrder);
+
+                        int quantityToSend = receivedOrder.getQuantity() - quantitySent;
+                        if (marketProductForSale.getQuantity() > quantityToSend) {
+                            itemToSell.setQuantity(itemToSell.getQuantity() - quantityToSend);
+                            wallet = walletRepository.save(wallet);
+                            String idReturnedFromExchange = sendOrderToExchange(receivedOrder, marketProductForSale.getPrice(), exchange, quantityToSend);
+                            receivedOrder
+                                    .getOrderInformation()
+                                    .add(new OrderInformationDto(exchange.getBaseUrl(),
+                                            idReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING, marketProductForSale.getPrice()));
+
+                        } else {
+                            itemToSell.setQuantity(receivedOrder.getQuantity());
+                            wallet = walletRepository.save(wallet);
+                            String idReturnedFromExchange = sendOrderToExchange(receivedOrder, marketProductForSale.getPrice(), exchange, marketProductForSale.getQuantity());
+                            receivedOrder
+                                    .getOrderInformation()
+                                    .add(new OrderInformationDto(exchange.getBaseUrl(),
+                                            idReturnedFromExchange, quantityToSend, 0, OrderItemStatus.PENDING, marketProductForSale.getPrice()));
+                        }
+                    } else {
+
+                        if(receivedOrder.getQuantity() > quantitySent){
+                            MarketDataDto marketDataDto = marketDataDtoOne.getAskPrice() > marketDataDtoTwo.getAskPrice() ? marketDataDtoOne : marketDataDtoTwo;
+                            ExchangeDto exchangeDto = exchangeOne.getId().equals(marketDataDto.getExchangeId()) ? exchangeOne : exchangeTwo;
+                            double price = marketDataDto.getAskPrice() + (0.09 *  marketDataDto.getAskPrice());
+                            String internalID = sendOrderToExchange(receivedOrder, price, exchangeDto, receivedOrder.getQuantity());
+
+                            receivedOrder
+                                    .getOrderInformation()
+                                    .add(new OrderInformationDto(exchangeDto.getBaseUrl(),
+                                            internalID, receivedOrder.getQuantity(), 0, OrderItemStatus.PENDING, price));
+                        }
+                        receivedOrder.setStatusInfo("Order processed");
+                        receivedOrder = orderRepository.save(receivedOrder);
                     }
-                }else {
-                    receivedOrder.setStatusInfo("Order processed");
-                    receivedOrder = orderRepository.save(receivedOrder);
+
                 }
-
             }
-
         }catch (InvalidOrderException exception){
             receivedOrder.setStatus(OrderStatus.INVALID);
             receivedOrder.setStatusInfo(exception.getMessage());
